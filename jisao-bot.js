@@ -1,9 +1,116 @@
 const { Telegraf } = require("telegraf");
+const cron = require("node-cron");
 
-require('dotenv').config();
-const botKeys = process.env.API_KEY;
+require("dotenv").config();
+const botKeys = process.env.TG_API_KEY;
+const weatherKey = process.env.WEATHERAPI_KEY;
 
 const jisaoBot = new Telegraf(botKeys);
+//const chatId = 56421333; chat-id of the bot itself
+const chatId = -4153236668;
 
-jisaoBot.start(ctx => ctx.reply('Жизяõ ёба хуёба'));
+jisaoBot.start(async (ctx) => {
+  await ctx.reply(
+    "Жизяõ ёба хуёба\nДоступные пока команды: \n/weather /weatherToday /weatherTomorrow"
+  );
+  //got chat id
+  //const test = await ctx.getChat();
+  //await ctx.reply(JSON.stringify(test));
+});
+
+jisaoBot.command("weather", async (ctx) => {
+  try {
+    ctx.reply(`пиздеther`);
+
+    /*await ctx.reply(
+      `Погодки в ${weather.location.name} стоят распрекрасные, ${weather.current.temp_c}°C`
+    );*/
+
+    const nowTime = new Date();
+    const mins = leadingZero(nowTime.getMinutes());
+    const hrs = leadingZero(nowTime.getHours());
+    const theDay = hrs > 18 ? "tomorrow" : "today";
+
+    postToBotWeather(theDay);
+
+  } catch (error) {
+    console.log("error:", error);
+    ctx.reply(`ошибка ёба`);
+  }
+});
+
+jisaoBot.command("weathertoday", async (ctx) => {
+  try {
+    const theDay = "today";
+
+    postToBotWeather(theDay);
+  } catch (error) {
+    console.log("error:", error);
+    ctx.reply(`ошибка ёба`);
+  }
+});
+
+jisaoBot.command("weathertomorrow", async (ctx) => {
+  try {
+    const theDay = "tomorrow";
+
+    postToBotWeather(theDay);
+  } catch (error) {
+    console.log("error:", error);
+    ctx.reply(`ошибка ёба`);
+  }
+});
+
+cron.schedule(
+  "45 6 * * *", //6.45 every day
+  () => {
+    console.log("Scheduling weather post...");
+    postToBotWeather("today");
+  },
+  { timezone: "Europe/Lisbon" }
+);
+cron.schedule(
+  "0 21 * * *", //21.00 every day
+  () => {
+    console.log("Scheduling weather post...");
+    postToBotWeather("tomorrow");
+  },
+  { timezone: "Europe/Lisbon" }
+);
+
 jisaoBot.launch();
+
+async function postToBotWeather(day) {
+  let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
+  let query2days = queryBase + `&q=Parede&days=2&aqi=no&alerts=yes`;
+
+  const weatherResponse = await fetch(query2days);
+  const weather = await weatherResponse.json();
+
+  console.log(query2days);
+
+  let dayToPost = day === "today" ? 0 : 1;
+  const theDayRus = day === "today" ? "сегодня ожидаются" : "завтра обещаются";
+
+  const forecast = weather.forecast.forecastday[dayToPost];
+
+  let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} распрекрасные,\n`;
+  stringPost += `от ${forecast.day.mintemp_c}°C до ${forecast.day.maxtemp_c}°C,\n`;
+  stringPost += `вероятность дождя ${forecast.day.daily_chance_of_rain}%,`;
+  stringPost +=
+    forecast.day.daily_chance_of_rain > 0.1
+      ? ` до ${forecast.day.totalprecip_mm}мм,`
+      : null;
+  stringPost += `\n\nсейчас ${weather.current.temp_c}°C`;
+
+  await jisaoBot.telegram.sendMessage(chatId, stringPost);
+}
+
+//add 0 to a 2-digit num (hours and minutes)
+function leadingZero(num) {
+  let withZero = "";
+
+  withZero = "0" + num;
+
+  return withZero.slice(-2);
+}
