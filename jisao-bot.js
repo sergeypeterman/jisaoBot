@@ -9,6 +9,8 @@ const jisaoBot = new Telegraf(botKeys);
 //const chatId = 56421333; chat-id of the bot itself
 const chatId = -4153236668;
 
+
+//---------------START-----------------
 jisaoBot.start(async (ctx) => {
   await ctx.reply(
     "Жизяõ ёба хуёба\nДоступные пока команды: \n/weather /weatherToday /weatherTomorrow"
@@ -18,6 +20,8 @@ jisaoBot.start(async (ctx) => {
   //await ctx.reply(JSON.stringify(test));
 });
 
+
+//---------------weather-----------------
 jisaoBot.command("weather", async (ctx) => {
   try {
     ctx.reply(`пиздеther`);
@@ -39,6 +43,8 @@ jisaoBot.command("weather", async (ctx) => {
   }
 });
 
+
+//---------------weathertoday-----------------
 jisaoBot.command("weathertoday", async (ctx) => {
   try {
     const theDay = "today";
@@ -50,6 +56,8 @@ jisaoBot.command("weathertoday", async (ctx) => {
   }
 });
 
+
+//---------------weathertomorrow-----------------
 jisaoBot.command("weathertomorrow", async (ctx) => {
   try {
     const theDay = "tomorrow";
@@ -61,6 +69,9 @@ jisaoBot.command("weathertomorrow", async (ctx) => {
   }
 });
 
+
+//---------------CRON-----------------
+//------------------------------------
 cron.schedule(
   "45 6 * * *", //6.45 every day
   async () => {
@@ -80,8 +91,13 @@ cron.schedule(
   { timezone: "Europe/Lisbon" }
 );
 
+//---------------LAUNCH-----------------
+//--------------------------------------
 jisaoBot.launch();
 
+
+//---------------FUNCTIONS-----------------
+//-----------------------------------------
 async function postToBotWeather(day) {
   let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
   let query2days = queryBase + `&q=Parede&days=2&aqi=no&alerts=yes`;
@@ -96,7 +112,7 @@ async function postToBotWeather(day) {
 
   const forecast = weather.forecast.forecastday[dayToPost];
 
-  let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} распрекрасные,\n`;
+  let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} хуёвые,\n`;
   stringPost += `от ${forecast.day.mintemp_c}°C до ${forecast.day.maxtemp_c}°C,\n`;
   stringPost += `вероятность дождя ${forecast.day.daily_chance_of_rain}%,`;
   stringPost +=
