@@ -65,16 +65,16 @@ cron.schedule(
   async () => {
     console.log("Scheduling weather post...");
     await jisaoBot.telegram.sendMessage(chatId, `доброго здоровичка`);
-    postToBotWeather("today");
+    postToBotWeather("today", null, chatId);
   },
   { timezone: "Europe/Lisbon" }
 );
 cron.schedule(
-  "10 22 * * *", //22.00 every day
+  "15 22 * * *", //22.00 every day
   async () => {
     console.log("Scheduling weather post...");
     await jisaoBot.telegram.sendMessage(chatId, `спокедулечки`);
-    postToBotWeather("tomorrow");
+    postToBotWeather("tomorrow", null, chatId);
   },
   { timezone: "Europe/Lisbon" }
 );
