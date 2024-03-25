@@ -112,9 +112,9 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
 
     let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} ${jisao.whole}`;
     stringPost += `, ${jisao.condition}\n`;
-    stringPost += `\n${jisao.day},\n${jisao.night},\n\n`;
-    stringPost += `${jisao.rain},\n`;
-    stringPost += `${jisao.uv}`;
+    stringPost += `\n☀️ ${jisao.day},\n🌙 ${jisao.night},\n\n`;
+    stringPost += `💦 ${jisao.rain},\n`;
+    stringPost += `😎 ${jisao.uv}`;
     stringPost += `\n\nсейчас ${weather.current.temp_c}°C${currentCondition}`;
 
     if (ctx === null) {
