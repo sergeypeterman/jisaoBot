@@ -70,7 +70,7 @@ cron.schedule(
   { timezone: "Europe/Lisbon" }
 );
 cron.schedule(
-  "2 22 * * *", //22.00 every day
+  "0 22 * * *", //22.00 every day
   async () => {
     console.log("Scheduling weather post...");
     await jisaoBot.telegram.sendMessage(chatId, `спокедулечки`);
@@ -92,6 +92,14 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
 
     const weatherResponse = await fetch(query2days);
     const weather = await weatherResponse.json();
+    const condResponse = await fetch(
+      "https://www.weatherapi.com/docs/conditions.json"
+    );
+    const conditionResponse = await condResponse.json();
+    //console.log(conditionResponse[0]);
+    const getCondition = getConditionRus(weather.current, conditionResponse);
+    const currentCondition =
+      getCondition === undefined ? null : `, ${getCondition}`;
 
     console.log(query2days);
 
@@ -100,13 +108,14 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
       day === "today" ? "сегодня ожидаются" : "завтра обещаются";
 
     const forecast = weather.forecast.forecastday[dayToPost];
-    const jisao = getJisaoDescription(forecast.day);
+    const jisao = getJisaoDescription(forecast.day, conditionResponse);
 
-    let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} ${jisao.whole}${jisao.isRain}\n`;
-    stringPost += `${jisao.day},\n${jisao.night},\n`;
+    let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} ${jisao.whole}`;
+    stringPost += `, ${jisao.condition}\n`;
+    stringPost += `\n${jisao.day},\n${jisao.night},\n\n`;
     stringPost += `${jisao.rain},\n`;
     stringPost += `${jisao.uv}`;
-    stringPost += `\n\nсейчас ${weather.current.temp_c}°C`;
+    stringPost += `\n\nсейчас ${weather.current.temp_c}°C${currentCondition}`;
 
     if (ctx === null) {
       await jisaoBot.telegram.sendMessage(targetchat, stringPost, {
@@ -133,7 +142,7 @@ function leadingZero(num) {
 }
 
 //describe jisao
-function getJisaoDescription(day) {
+function getJisaoDescription(day, codeList) {
   const jisao = {
     whole: "",
     day: "",
@@ -141,6 +150,7 @@ function getJisaoDescription(day) {
     rain: "",
     uv: "",
     isRain: "",
+    condition: "",
   };
   const weather = {
     day: day.maxtemp_c,
@@ -151,6 +161,7 @@ function getJisaoDescription(day) {
   };
 
   jisao.isRain = day.daily_will_it_rain ? ", дождь" : null;
+  jisao.condition = getConditionRus(day, codeList);
 
   if (weather.day < 14) {
     jisao.whole = "холодрыговые";
@@ -213,4 +224,23 @@ function getJisaoDescription(day) {
   }
 
   return jisao;
+}
+
+//condition in rus
+function getConditionRus(day, codeList) {
+  let conditionRus;
+  let conditionCode = day.condition.code;
+
+  const codeListItem = codeList.find((item) => item.code === conditionCode);
+
+  const conditionObjRus = codeListItem.languages.find(
+    (item) => item.lang_name === "Russian"
+  );
+
+  conditionRus =
+    conditionObjRus === undefined
+      ? undefined
+      : conditionObjRus.day_text.toLowerCase();
+
+  return conditionRus;
 }
