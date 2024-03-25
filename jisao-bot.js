@@ -100,20 +100,22 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
       day === "today" ? "сегодня ожидаются" : "завтра обещаются";
 
     const forecast = weather.forecast.forecastday[dayToPost];
+    const jisao = getJisaoDescription(forecast.day);
 
-    let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} хуёвые,\n`;
-    stringPost += `от ${forecast.day.mintemp_c}°C до ${forecast.day.maxtemp_c}°C,\n`;
-    stringPost += `вероятность дождя ${forecast.day.daily_chance_of_rain}%,`;
-    stringPost +=
-      forecast.day.daily_chance_of_rain > 0.1
-        ? ` до ${forecast.day.totalprecip_mm}мм,`
-        : null;
+    let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} ${jisao.whole}${jisao.isRain}\n`;
+    stringPost += `${jisao.day},\n${jisao.night},\n`;
+    stringPost += `${jisao.rain},\n`;
+    stringPost += `${jisao.uv}`;
     stringPost += `\n\nсейчас ${weather.current.temp_c}°C`;
 
     if (ctx === null) {
-      await jisaoBot.telegram.sendMessage(targetchat, stringPost);
+      await jisaoBot.telegram.sendMessage(targetchat, stringPost, {
+        parse_mode: "Markdown",
+      });
     } else if (ctx) {
-      await ctx.reply(stringPost);
+      await ctx.reply(stringPost, { parse_mode: "Markdown" });
+    } else {
+      throw new Error("error, context ctx doesn't exist");
     }
   } catch (err) {
     console.log("error:", err);
@@ -128,4 +130,87 @@ function leadingZero(num) {
   withZero = "0" + num;
 
   return withZero.slice(-2);
+}
+
+//describe jisao
+function getJisaoDescription(day) {
+  const jisao = {
+    whole: "",
+    day: "",
+    night: "",
+    rain: "",
+    uv: "",
+    isRain: "",
+  };
+  const weather = {
+    day: day.maxtemp_c,
+    night: day.mintemp_c,
+    rainChance: day.daily_chance_of_rain,
+    rainMm: day.totalprecip_mm,
+    uv: day.uv,
+  };
+
+  jisao.isRain = day.daily_will_it_rain ? ", дождь" : null;
+
+  if (weather.day < 14) {
+    jisao.whole = "холодрыговые";
+  } else if (weather.day < 19) {
+    jisao.whole = "прохладновые";
+  } else if (weather.day < 26) {
+    jisao.whole = "распрекрасные";
+  } else if (weather.day < 31) {
+    jisao.whole = "жарищевые";
+  } else {
+    jisao.whole = "сковородовые";
+  }
+
+  if (weather.night < 10) {
+    jisao.night = `*${Math.round(weather.night)}°C*, ночью дубак`;
+  } else if (weather.night < 15) {
+    jisao.night = `*${Math.round(weather.night)}°C*, ночью прохладно`;
+  } else if (weather.night < 21) {
+    jisao.night = `*${Math.round(weather.night)}°C*, ночью тепло`;
+  } else {
+    jisao.night = `*${Math.round(weather.night)}°C*, ночью потеем`;
+  }
+
+  if (weather.day < 10) {
+    jisao.day = `*${Math.round(weather.day)}°C*, днём носим два пухана`;
+  } else if (weather.day < 16) {
+    jisao.day = `*${Math.round(weather.day)}°C*, днём носим пухан`;
+  } else if (weather.day < 21) {
+    jisao.day = `*${Math.round(weather.day)}°C*, днём курточка`;
+  } else if (weather.day < 26) {
+    jisao.day = `*${Math.round(weather.day)}°C*, днём футболочка`;
+  } else {
+    jisao.day = `*${Math.round(weather.day)}°C*, днём пиздос`;
+  }
+
+  if (weather.rainMm < 1) {
+    jisao.rain = `сухо`;
+  } else if (weather.rainMm < 5) {
+    jisao.rain = `${weather.rainMm}мм сыроватости, поливабилити ${weather.rainChance}%`;
+  } else if (weather.rainMm < 10) {
+    jisao.rain = `${weather.rainMm}мм мокроватости, поливабилити ${weather.rainChance}%`;
+  } else if (weather.rainMm < 15) {
+    jisao.rain = `${weather.rainMm}мм лужеватости, поливабилити ${weather.rainChance}%`;
+  } else if (weather.rainMm < 30) {
+    jisao.rain = `${weather.rainMm}мм ливневатости, поливабилити ${weather.rainChance}%`;
+  } else {
+    jisao.rain = `${weather.rainMm}мм потопа, поливабилити ${weather.rainChance}%`;
+  }
+
+  if (weather.uv < 3) {
+    jisao.uv = `UV = ${weather.uv}, солнце где-то есть`;
+  } else if (weather.uv < 5) {
+    jisao.uv = `UV = ${weather.uv}, солнце фигачит`;
+  } else if (weather.uv < 8) {
+    jisao.uv = `UV = ${weather.uv}, надо вмазаться`;
+  } else if (weather.uv < 10) {
+    jisao.uv = `UV = ${weather.uv}, шляпу гусям`;
+  } else {
+    jisao.uv = `UV = ${weather.uv}, пизда гусю`;
+  }
+
+  return jisao;
 }
