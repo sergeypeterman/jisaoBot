@@ -39,7 +39,7 @@ jisaoBot.command("weathertoday", async (ctx) => {
   try {
     const theDay = "today";
 
-    postToBotWeather(theDay);
+    postToBotWeather(theDay, ctx);
   } catch (error) {
     console.log("error:", error);
     ctx.reply(`ошибка ёба`);
@@ -51,7 +51,7 @@ jisaoBot.command("weathertomorrow", async (ctx) => {
   try {
     const theDay = "tomorrow";
 
-    postToBotWeather(theDay);
+    postToBotWeather(theDay, ctx);
   } catch (error) {
     console.log("error:", error);
     ctx.reply(`ошибка ёба`);
