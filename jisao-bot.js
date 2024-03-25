@@ -6,9 +6,8 @@ const botKeys = process.env.TG_API_KEY;
 const weatherKey = process.env.WEATHERAPI_KEY;
 
 const jisaoBot = new Telegraf(botKeys);
-//const chatId = 56421333; chat-id of the bot itself
+const chatIdBot = 56421333; //chat-id of the bot itself
 const chatId = -4153236668;
-
 
 //---------------START-----------------
 jisaoBot.start(async (ctx) => {
@@ -20,29 +19,20 @@ jisaoBot.start(async (ctx) => {
   //await ctx.reply(JSON.stringify(test));
 });
 
-
 //---------------weather-----------------
 jisaoBot.command("weather", async (ctx) => {
   try {
-    ctx.reply(`пиздеther`);
-
-    /*await ctx.reply(
-      `Погодки в ${weather.location.name} стоят распрекрасные, ${weather.current.temp_c}°C`
-    );*/
-
     const nowTime = new Date();
     const mins = leadingZero(nowTime.getMinutes());
     const hrs = leadingZero(nowTime.getHours());
     const theDay = hrs > 18 ? "tomorrow" : "today";
 
-    postToBotWeather(theDay);
-
+    postToBotWeather(theDay, ctx);
   } catch (error) {
     console.log("error:", error);
     ctx.reply(`ошибка ёба`);
   }
 });
-
 
 //---------------weathertoday-----------------
 jisaoBot.command("weathertoday", async (ctx) => {
@@ -56,7 +46,6 @@ jisaoBot.command("weathertoday", async (ctx) => {
   }
 });
 
-
 //---------------weathertomorrow-----------------
 jisaoBot.command("weathertomorrow", async (ctx) => {
   try {
@@ -68,7 +57,6 @@ jisaoBot.command("weathertomorrow", async (ctx) => {
     ctx.reply(`ошибка ёба`);
   }
 });
-
 
 //---------------CRON-----------------
 //------------------------------------
@@ -95,33 +83,42 @@ cron.schedule(
 //--------------------------------------
 jisaoBot.launch();
 
-
 //---------------FUNCTIONS-----------------
 //-----------------------------------------
-async function postToBotWeather(day) {
-  let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
-  let query2days = queryBase + `&q=Parede&days=2&aqi=no&alerts=yes`;
+async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
+  try {
+    let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
+    let query2days = queryBase + `&q=Parede&days=2&aqi=no&alerts=yes`;
 
-  const weatherResponse = await fetch(query2days);
-  const weather = await weatherResponse.json();
+    const weatherResponse = await fetch(query2days);
+    const weather = await weatherResponse.json();
 
-  console.log(query2days);
+    console.log(query2days);
 
-  let dayToPost = day === "today" ? 0 : 1;
-  const theDayRus = day === "today" ? "сегодня ожидаются" : "завтра обещаются";
+    let dayToPost = day === "today" ? 0 : 1;
+    const theDayRus =
+      day === "today" ? "сегодня ожидаются" : "завтра обещаются";
 
-  const forecast = weather.forecast.forecastday[dayToPost];
+    const forecast = weather.forecast.forecastday[dayToPost];
 
-  let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} хуёвые,\n`;
-  stringPost += `от ${forecast.day.mintemp_c}°C до ${forecast.day.maxtemp_c}°C,\n`;
-  stringPost += `вероятность дождя ${forecast.day.daily_chance_of_rain}%,`;
-  stringPost +=
-    forecast.day.daily_chance_of_rain > 0.1
-      ? ` до ${forecast.day.totalprecip_mm}мм,`
-      : null;
-  stringPost += `\n\nсейчас ${weather.current.temp_c}°C`;
+    let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} хуёвые,\n`;
+    stringPost += `от ${forecast.day.mintemp_c}°C до ${forecast.day.maxtemp_c}°C,\n`;
+    stringPost += `вероятность дождя ${forecast.day.daily_chance_of_rain}%,`;
+    stringPost +=
+      forecast.day.daily_chance_of_rain > 0.1
+        ? ` до ${forecast.day.totalprecip_mm}мм,`
+        : null;
+    stringPost += `\n\nсейчас ${weather.current.temp_c}°C`;
 
-  await jisaoBot.telegram.sendMessage(chatId, stringPost);
+    if (ctx === null) {
+      await jisaoBot.telegram.sendMessage(targetchat, stringPost);
+    } else if (ctx) {
+      await ctx.reply(stringPost);
+    }
+  } catch (err) {
+    console.log("error:", err);
+    jisaoBot.telegram.sendMessage(chatIdBot, err);
+  }
 }
 
 //add 0 to a 2-digit num (hours and minutes)
