@@ -70,7 +70,7 @@ cron.schedule(
   { timezone: "Europe/Lisbon" }
 );
 cron.schedule(
-  "0 22 * * *", //22.00 every day
+  "10 22 * * *", //22.00 every day
   async () => {
     console.log("Scheduling weather post...");
     await jisaoBot.telegram.sendMessage(chatId, `спокедулечки`);
