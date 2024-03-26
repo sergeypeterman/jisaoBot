@@ -1,19 +1,36 @@
-const { Telegraf } = require("telegraf");
+const { Telegraf, Markup } = require("telegraf");
+const fs = require("fs");
 const cron = require("node-cron");
 
 require("dotenv").config();
 const botKeys = process.env.TG_API_KEY;
 const weatherKey = process.env.WEATHERAPI_KEY;
+const accuweatherKey = process.env.ACCUWEATHER_KEY;
+const chatIdBot = process.env.BOT_ID; //chat-id of the bot itself
+const chatId = process.env.CHAT_ID; //Jisao group id
+const storagePath = "storage.txt";
+const location = { latitude: 41.89193, longitude: 12.51133 }; //all roads lead to Rome
 
 const jisaoBot = new Telegraf(botKeys);
-const chatIdBot = 56421333; //chat-id of the bot itself
-const chatId = -4153236668;
 
 //---------------START-----------------
 jisaoBot.start(async (ctx) => {
   await ctx.reply(
     "Жизяõ ёба хуёба\nДоступные пока команды: \n/weather /weatherToday /weatherTomorrow"
   );
+  const locationJson = JSON.stringify(location, null, 2);
+  //clear the file
+  fs.writeFile(storagePath, locationJson, (err) => {
+    if (err) {
+      console.log(err);
+    }
+  });
+  //write Rome
+  fs.writeFile(storagePath, locationJson, (err) => {
+    if (err) {
+      console.log(err);
+    }
+  });
   //got chat id
   //const test = await ctx.getChat();
   //await ctx.reply(JSON.stringify(test));
@@ -23,7 +40,7 @@ jisaoBot.start(async (ctx) => {
 jisaoBot.command("weather", async (ctx) => {
   try {
     const nowTime = new Date();
-    const mins = leadingZero(nowTime.getMinutes());
+    //const mins = leadingZero(nowTime.getMinutes());
     const hrs = leadingZero(nowTime.getHours());
     const theDay = hrs > 18 ? "tomorrow" : "today";
 
@@ -58,10 +75,58 @@ jisaoBot.command("weathertomorrow", async (ctx) => {
   }
 });
 
+//--------------LOCATION-------------
+//-----------------------------------
+
+//ask for user location
+jisaoBot.command("setlocation", async (ctx) => {
+  try {
+    await ctx.reply(
+      "ты где гусь",
+      Markup.keyboard([Markup.button.locationRequest("туть")]).resize()
+    );
+  } catch (error) {
+    console.log("error:", error);
+    ctx.reply(`ошибка ёба`);
+  }
+});
+
+//set user location
+jisaoBot.on("location", async (ctx) => {
+  try {
+    const { latitude, longitude } = ctx.message.location;
+    location.latitude = latitude;
+    location.longitude = longitude;
+
+    const locationJson = JSON.stringify(location, null, 2);
+
+    //clear the file
+    fs.writeFile(storagePath, locationJson, (err) => {
+      if (err) {
+        console.log(err);
+      }
+    });
+    //write new location
+    fs.writeFile(storagePath, locationJson, (err) => {
+      if (err) {
+        console.log(err);
+      }
+    });
+
+    await ctx.reply(
+      `от спасибо хорошо\nщирота ${location.latitude} - долгота ${location.longitude}`,
+      Markup.removeKeyboard()
+    );
+  } catch (err) {
+    console.log(err);
+    await ctx.reply("ошибка ёба");
+  }
+});
+
 //---------------CRON-----------------
 //------------------------------------
 cron.schedule(
-  "45 6 * * *", //6.45 every day
+  "40 6 * * *", //6.40 every day
   async () => {
     console.log("Scheduling weather post...");
     await jisaoBot.telegram.sendMessage(chatId, `доброго здоровичка`);
@@ -70,7 +135,7 @@ cron.schedule(
   { timezone: "Europe/Lisbon" }
 );
 cron.schedule(
-  "15 22 * * *", //22.00 every day
+  "15 22 * * *", //22.15 every day
   async () => {
     console.log("Scheduling weather post...");
     await jisaoBot.telegram.sendMessage(chatId, `спокедулечки`);
@@ -132,6 +197,15 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
   }
 }
 
+//weather for next 120 mins, Accuweater
+async function getMinuteCast() {
+  const jisaoMinute = {};
+  return jisaoMinute;
+}
+
+//unversal function, maybe it's excessive
+async function getForecast(provider = "accuweather") {}
+
 //add 0 to a 2-digit num (hours and minutes)
 function leadingZero(num) {
   let withZero = "";
@@ -141,7 +215,7 @@ function leadingZero(num) {
   return withZero.slice(-2);
 }
 
-//describe jisao
+//describe jisao, returns object with ready to post description
 function getJisaoDescription(day, codeList) {
   const jisao = {
     whole: "",
