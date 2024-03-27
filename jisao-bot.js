@@ -1,15 +1,34 @@
 const { Telegraf, Markup } = require("telegraf");
-const fs = require("fs");
+//const fs = require("fs");
 const cron = require("node-cron");
 
 require("dotenv").config();
 const botKeys = process.env.TG_API_KEY;
 const weatherKey = process.env.WEATHERAPI_KEY;
 const accuweatherKey = process.env.ACCUWEATHER_KEY;
+const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 const chatIdBot = process.env.BOT_ID; //chat-id of the bot itself
 const chatId = process.env.CHAT_ID; //Jisao group id
-const storagePath = "storage.txt";
-const location = { latitude: 41.89193, longitude: 12.51133 }; //all roads lead to Rome
+//const storagePath = "storage.txt";
+
+if (typeof localStorage === "undefined" || localStorage === null) {
+  var LocalStorage = require("node-localstorage").LocalStorage;
+  localStorage = new LocalStorage("./scratch");
+}
+
+class UserData {
+  constructor(userID, location = { latitude: 38.686116, longitude: -9.349137 }) {
+    this.location = location;
+    this.userID = userID;
+    this.locationUpdateRequested = false;
+    //geoposition accuweather
+    //http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=GXKCfVPiRLSEozsX3WQTSRLTMpqODOcs&q=38.686116%2C-9.349137
+    const locationJson = JSON.stringify(this, null, 2);
+    localStorage.setItem(`${userID}`, locationJson);
+  }
+}
+
+const chatData = new UserData(chatId); //all roads lead to Parede. Writing home location for the chat
 
 const jisaoBot = new Telegraf(botKeys);
 
@@ -18,24 +37,13 @@ jisaoBot.start(async (ctx) => {
   await ctx.reply(
     "Жизяõ ёба хуёба\nДоступные пока команды: \n/weather /weatherToday /weatherTomorrow"
   );
-  const locationJson = JSON.stringify(location, null, 2);
-  //clear the file
-  fs.writeFile(storagePath, locationJson, (err) => {
-    if (err) {
-      console.log(err);
-    }
-  });
-  //write Rome
-  fs.writeFile(storagePath, locationJson, (err) => {
-    if (err) {
-      console.log(err);
-    }
-  });
+
   //got chat id
   //const test = await ctx.getChat();
   //await ctx.reply(JSON.stringify(test));
 });
 
+//==========HOME WEATHER FORECAST========
 //---------------weather-----------------
 jisaoBot.command("weather", async (ctx) => {
   try {
@@ -75,14 +83,40 @@ jisaoBot.command("weathertomorrow", async (ctx) => {
   }
 });
 
+//==========USER WEATHER FORECAST========
+jisaoBot.command("weathernow", async (ctx) => {
+  try {
+    await ctx.reply(`ишь чо захотел`);
+    const minuteReply = await getMinuteCast(ctx);
+    await ctx.reply(minuteReply.summaryPrecipitation);
+  } catch (error) {
+    console.log("error:", error);
+    ctx.reply(`ошибка ёба`);
+  }
+});
+
+async function getMinuteCast(ctx) {
+  const jisaoMinute = { summaryPrecipitation: "" };
+
+  let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
+  queryMinute += `${chatData.location.latitude},${chatData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
+  const accuResp = await fetch(queryMinute);
+  const forecastMinute = await accuResp.json();
+  console.log(JSON.stringify(forecastMinute));
+
+  jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
+
+  return jisaoMinute;
+}
+
 //--------------LOCATION-------------
 //-----------------------------------
 
 //ask for user location
-jisaoBot.command("setlocation", async (ctx) => {
+jisaoBot.command("updatelocation", async (ctx) => {
   try {
     await ctx.reply(
-      "ты где гусь",
+      "ты где ферзь",
       Markup.keyboard([Markup.button.locationRequest("туть")]).resize()
     );
   } catch (error) {
@@ -91,30 +125,22 @@ jisaoBot.command("setlocation", async (ctx) => {
   }
 });
 
-//set user location
+//update user location and store on disk
 jisaoBot.on("location", async (ctx) => {
   try {
     const { latitude, longitude } = ctx.message.location;
-    location.latitude = latitude;
-    location.longitude = longitude;
+    location.user_id = ctx.from.id;
+
+    let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
+    let queryLocationName =
+      queryBase + `&q=${latitude},${longitude}&days=1&aqi=no&alerts=no`;
+    const locationResponse = await fetch(queryLocationName);
+    const locationObj = await locationResponse.json();
 
     const locationJson = JSON.stringify(location, null, 2);
-
-    //clear the file
-    fs.writeFile(storagePath, locationJson, (err) => {
-      if (err) {
-        console.log(err);
-      }
-    });
-    //write new location
-    fs.writeFile(storagePath, locationJson, (err) => {
-      if (err) {
-        console.log(err);
-      }
-    });
-
-    await ctx.reply(
-      `от спасибо хорошо\nщирота ${location.latitude} - долгота ${location.longitude}`,
+    localStorage.setItem("location", locationJson);
+    const city = await ctx.reply(
+      `ты нахуя туда залез\nв ${locationObj.location.name}`,
       Markup.removeKeyboard()
     );
   } catch (err) {
@@ -138,8 +164,8 @@ cron.schedule(
   "15 22 * * *", //22.15 every day
   async () => {
     console.log("Scheduling weather post...");
-    await jisaoBot.telegram.sendMessage(chatId, `спокедулечки`);
     postToBotWeather("tomorrow", null, chatId);
+    await jisaoBot.telegram.sendMessage(chatId, `спокедулечки`);
   },
   { timezone: "Europe/Lisbon" }
 );
@@ -198,10 +224,6 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
 }
 
 //weather for next 120 mins, Accuweater
-async function getMinuteCast() {
-  const jisaoMinute = {};
-  return jisaoMinute;
-}
 
 //unversal function, maybe it's excessive
 async function getForecast(provider = "accuweather") {}
