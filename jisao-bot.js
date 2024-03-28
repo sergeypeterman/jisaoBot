@@ -5,7 +5,7 @@ const cron = require("node-cron");
 require("dotenv").config();
 const botKeys = process.env.TG_API_KEY;
 const weatherKey = process.env.WEATHERAPI_KEY;
-const accuweatherKey = process.env.ACCUWEATHER_KEY;
+const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
 const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 const chatIdBot = process.env.BOT_ID; //chat-id of the bot itself
 const chatId = process.env.CHAT_ID; //Jisao group id
@@ -16,19 +16,78 @@ if (typeof localStorage === "undefined" || localStorage === null) {
   localStorage = new LocalStorage("./scratch");
 }
 
-class UserData {
-  constructor(userID, location = { latitude: 38.686116, longitude: -9.349137 }) {
-    this.location = location;
-    this.userID = userID;
-    this.locationUpdateRequested = false;
-    //geoposition accuweather
-    //http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=GXKCfVPiRLSEozsX3WQTSRLTMpqODOcs&q=38.686116%2C-9.349137
-    const locationJson = JSON.stringify(this, null, 2);
-    localStorage.setItem(`${userID}`, locationJson);
+async function CreateUser(
+  userID,
+  location = { latitude: 38.686116, longitude: -9.349137 }
+) {
+  const newUser = {
+    userID: userID,
+    location: location,
+    locationUpdateRequested: false,
+    locationID: 0,
+    locationName: "",
+  };
+
+  const checkUserExist = localStorage.getItem(`${userID}`);
+  if (checkUserExist) {
+    const existingUser = JSON.parse(checkUserExist);
+    if (existingUser.location.latitude === newUser.location.latitude) {
+      if (existingUser.location.longitude === newUser.location.longitude) {
+        console.log(
+          `user ${userID} already exists and located in ${existingUser.locationName}`
+        );
+        return existingUser;
+      }
+    }
   }
+
+  try {
+    console.log("getting location name and ID");
+    let query = `http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=${accuweatherKey}`;
+    query += `&q=${newUser.location.latitude},${newUser.location.longitude}`;
+    const response = await fetch(query);
+    const geopositionRes = await response.json();
+    newUser.locationID = geopositionRes.Key;
+
+    queryName = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}&q=${newUser.location.latitude},${newUser.location.longitude}&days=1&aqi=no&alerts=no`;
+    const responseName = await fetch(queryName);
+    const geopositionNameRes = await responseName.json();
+    newUser.locationName = geopositionNameRes.location.name;
+
+    const locationJson = JSON.stringify(newUser, null, 2);
+    localStorage.setItem(`${userID}`, locationJson);
+  } catch (err) {
+    console.log(err);
+  }
+  return await newUser;
 }
 
-const chatData = new UserData(chatId); //all roads lead to Parede. Writing home location for the chat
+function create1hrForecastObject(
+  temperature = 0,
+  realfeel = 0,
+  wind = 0,
+  windgust = 0,
+  humid = 0,
+  rain = 0,
+  rainChance = 0
+) {
+  const forecast1hr = {
+    temperature: temperature,
+    realfeel: realfeel,
+    wind: wind,
+    windgust: windgust,
+    humid: humid,
+    rain: rain,
+    rainChance: rainChance,
+  };
+
+  return forecast1hr;
+}
+
+let chatData;
+(async () => {
+  chatData = await CreateUser(chatId);
+})(); //all roads lead to Parede. Writing home location for the chat
 
 const jisaoBot = new Telegraf(botKeys);
 
@@ -83,29 +142,78 @@ jisaoBot.command("weathertomorrow", async (ctx) => {
   }
 });
 
+function getMinuteDescription(userData, minuteReply) {
+  const hour1 = minuteReply.forecast12hr[0];
+  const hour2 = minuteReply.forecast12hr[1];
+
+  let forecast2hr = `В ${
+    userData.locationName
+  } ${minuteReply.summaryPrecipitation.toLowerCase()}\n\n`;
+  forecast2hr += `В этом часу\n🌡️ ${hour1.temperature}°C, ощущается как ${hour1.realfeel}°C\n`;
+  forecast2hr += `💨 ветер ${hour1.wind}м/с c порывами до ${hour1.windgust}м/с\n`;
+  forecast2hr +=
+    hour1.rain > 0
+      ? `☔ ${hour1.rain}мм осадков с вероятностью ${hour1.rainChance}%`
+      : "";
+  forecast2hr += `\n\nВ следующем часу\n🌡️ ${hour2.temperature}°C, ощущается как ${hour2.realfeel}°C\n`;
+  forecast2hr += `💨 ветер ${hour2.wind}м/с c порывами до ${hour2.windgust}м/с\n`;
+  forecast2hr +=
+    hour2.rain > 0
+      ? `☔ ${hour2.rain}мм осадков с вероятностью ${hour2.rainChance}%`
+      : "";
+  return forecast2hr;
+}
+
 //==========USER WEATHER FORECAST========
-jisaoBot.command("weathernow", async (ctx) => {
+jisaoBot.command("weather2hr_home", async (ctx) => {
   try {
-    await ctx.reply(`ишь чо захотел`);
-    const minuteReply = await getMinuteCast(ctx);
-    await ctx.reply(minuteReply.summaryPrecipitation);
+    const minuteReply = await getHomeCast2hr();
+    let forecast2hr = getMinuteDescription(chatData, minuteReply);
+
+    await ctx.reply(forecast2hr);
   } catch (error) {
     console.log("error:", error);
     ctx.reply(`ошибка ёба`);
   }
 });
 
-async function getMinuteCast(ctx) {
-  const jisaoMinute = { summaryPrecipitation: "" };
+async function getHomeCast2hr() {
+  const jisaoMinute = {
+    summaryPrecipitation: "",
+    forecast12hr: [],
+  };
+  try {
+    //getting minutecast. Later draw a line with symbols be 10 mins. --RRRR----RR
+    console.log(chatData);
+    let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
+    queryMinute += `${chatData.location.latitude},${chatData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
+    const accuResp = await fetch(queryMinute);
+    const forecastMinute = await accuResp.json();
+    //console.log(JSON.stringify(forecastMinute));
 
-  let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
-  queryMinute += `${chatData.location.latitude},${chatData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
-  const accuResp = await fetch(queryMinute);
-  const forecastMinute = await accuResp.json();
-  console.log(JSON.stringify(forecastMinute));
+    jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
 
-  jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
+    let query12hr = `http://dataservice.accuweather.com/forecasts/v1/hourly/12hour/`;
+    query12hr += `${chatData.locationID}?apikey=${accuweatherKey}&language=ru-ru&details=true&metric=true`;
+    const accu12Resp = await fetch(query12hr);
+    const forecast12hr = await accu12Resp.json();
 
+    for (const hour of forecast12hr) {
+      //console.log(hour.Temperature.Value);
+      const hrForecast = create1hrForecastObject(
+        hour.Temperature.Value,
+        hour.RealFeelTemperatureShade.Value,
+        Math.round((hour.Wind.Speed.Value * 10) / 3.6) / 10,
+        Math.round((hour.WindGust.Speed.Value * 10) / 3.6) / 10,
+        hour.RelativeHumidity,
+        hour.TotalLiquid.Value,
+        hour.RainProbability
+      );
+      jisaoMinute.forecast12hr.push(hrForecast);
+    }
+  } catch (err) {
+    console.log(err);
+  }
   return jisaoMinute;
 }
 
