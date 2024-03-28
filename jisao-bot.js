@@ -9,14 +9,13 @@ const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
 const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 const chatIdBot = process.env.BOT_ID; //chat-id of the bot itself
 const chatId = process.env.CHAT_ID; //Jisao group id
-//const storagePath = "storage.txt";
 
 if (typeof localStorage === "undefined" || localStorage === null) {
   var LocalStorage = require("node-localstorage").LocalStorage;
   localStorage = new LocalStorage("./scratch");
 }
 
-async function CreateUser(
+async function createUser(
   userID,
   location = { latitude: 38.686116, longitude: -9.349137 }
 ) {
@@ -42,7 +41,7 @@ async function CreateUser(
   }
 
   try {
-    console.log("getting location name and ID");
+    console.log("createUser(): getting location name and ID");
     let query = `http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=${accuweatherKey}`;
     query += `&q=${newUser.location.latitude},${newUser.location.longitude}`;
     const response = await fetch(query);
@@ -86,7 +85,7 @@ function create1hrForecastObject(
 
 let chatData;
 (async () => {
-  chatData = await CreateUser(chatId);
+  chatData = await createUser(chatId);
 })(); //all roads lead to Parede. Writing home location for the chat
 
 const jisaoBot = new Telegraf(botKeys);
@@ -167,7 +166,7 @@ function getMinuteDescription(userData, minuteReply) {
 //==========USER WEATHER FORECAST========
 jisaoBot.command("weather2hr_home", async (ctx) => {
   try {
-    const minuteReply = await getHomeCast2hr();
+    const minuteReply = await getForecast2hr();
     let forecast2hr = getMinuteDescription(chatData, minuteReply);
 
     await ctx.reply(forecast2hr);
@@ -177,16 +176,55 @@ jisaoBot.command("weather2hr_home", async (ctx) => {
   }
 });
 
-async function getHomeCast2hr() {
+jisaoBot.command("weather2hr", async (ctx) => {
+  try {
+    let userID = ctx.from.id;
+    const minuteReply = await getForecast2hr(userID);
+    
+    let userData;
+    if (!localStorage.getItem(`${userID}`)) {
+      console.log(`weather2hr: user ${userID} doesn't exist`);
+      await ctx.reply(`user ${userID} doesn't exist`);
+    } else {
+      userData = JSON.parse(localStorage.getItem(`${userID}`));
+      console.log(`weather2hr: user ${userData.userID} exists`);
+    }
+
+    let forecast2hr = getMinuteDescription(userData, minuteReply);
+
+    await ctx.reply(forecast2hr);
+  } catch (error) {
+    console.log("error:", error);
+    ctx.reply(`ошибка ёба`);
+  }
+});
+
+async function getForecast2hr(userID = null) {
   const jisaoMinute = {
     summaryPrecipitation: "",
     forecast12hr: [],
   };
+
+  let userData;
+  if (!userID) {
+    userData = chatData;
+  } else {
+    if (!localStorage.getItem(`${userID}`)) {
+      console.log(`user ${userID} doesn't exist`);
+      jisaoMinute.summaryPrecipitation = `user ${userID} doesn't exist`;
+      return jisaoMinute;
+    } else {
+      userData = JSON.parse(localStorage.getItem(`${userID}`));
+      console.log(`user exists ${JSON.stringify(userData, null, 2)}`);
+      //return jisaoMinute;
+    }
+  }
+
   try {
     //getting minutecast. Later draw a line with symbols be 10 mins. --RRRR----RR
-    console.log(chatData);
+    //console.log(userData);
     let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
-    queryMinute += `${chatData.location.latitude},${chatData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
+    queryMinute += `${userData.location.latitude},${userData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
     const accuResp = await fetch(queryMinute);
     const forecastMinute = await accuResp.json();
     //console.log(JSON.stringify(forecastMinute));
@@ -194,7 +232,7 @@ async function getHomeCast2hr() {
     jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
 
     let query12hr = `http://dataservice.accuweather.com/forecasts/v1/hourly/12hour/`;
-    query12hr += `${chatData.locationID}?apikey=${accuweatherKey}&language=ru-ru&details=true&metric=true`;
+    query12hr += `${userData.locationID}?apikey=${accuweatherKey}&language=ru-ru&details=true&metric=true`;
     const accu12Resp = await fetch(query12hr);
     const forecast12hr = await accu12Resp.json();
 
@@ -211,6 +249,7 @@ async function getHomeCast2hr() {
       );
       jisaoMinute.forecast12hr.push(hrForecast);
     }
+    console.log(JSON.stringify(jisaoMinute.forecast12hr[0]));
   } catch (err) {
     console.log(err);
   }
@@ -223,6 +262,26 @@ async function getHomeCast2hr() {
 //ask for user location
 jisaoBot.command("updatelocation", async (ctx) => {
   try {
+    let userID = ctx.from.id;
+    const checkUserExist = localStorage.getItem(`${userID}`);
+    if (!checkUserExist) {
+      console.log(`user ${userID} doesn't exist`);
+      await ctx.reply(`user ${userID} doesn't exist, creating new user`);
+      const newUser = await createUser(userID);
+      newUser.locationUpdateRequested = true;
+      await ctx.reply(
+        `user ${newUser.userID} created, default location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
+      );
+    } else {
+      userData = JSON.parse(checkUserExist);
+      userData.locationUpdateRequested = true;
+      await ctx.reply(`user exists ${JSON.stringify(userData, null, 2)}`);
+      localStorage.setItem(
+        `${userData.userID}`,
+        JSON.stringify(userData, null, 2)
+      );
+    }
+
     await ctx.reply(
       "ты где ферзь",
       Markup.keyboard([Markup.button.locationRequest("туть")]).resize()
@@ -237,18 +296,51 @@ jisaoBot.command("updatelocation", async (ctx) => {
 jisaoBot.on("location", async (ctx) => {
   try {
     const { latitude, longitude } = ctx.message.location;
-    location.user_id = ctx.from.id;
 
-    let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
-    let queryLocationName =
-      queryBase + `&q=${latitude},${longitude}&days=1&aqi=no&alerts=no`;
-    const locationResponse = await fetch(queryLocationName);
-    const locationObj = await locationResponse.json();
+    const userID = ctx.from.id;
+    const checkUserExist = localStorage.getItem(`${userID}`);
+    let userData;
 
-    const locationJson = JSON.stringify(location, null, 2);
-    localStorage.setItem("location", locationJson);
-    const city = await ctx.reply(
-      `ты нахуя туда залез\nв ${locationObj.location.name}`,
+    if (!checkUserExist) {
+      console.log(`user ${userID} doesn't exist`);
+      await ctx.reply(`user ${userID} doesn't exist, creating new user`);
+      const newUser = await createUser(userID, {
+        latitude: latitude,
+        longitude: longitude,
+      });
+      await ctx.reply(
+        `user ${newUser.userID} created, location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
+      );
+      userData = newUser;
+    } else {
+      userData = JSON.parse(checkUserExist);
+      if (userData.locationUpdateRequested) {
+        await ctx.reply(`user ${userData.userID} exists, updating location`);
+        userData.location.latitude = latitude;
+        userData.location.longitude = longitude;
+        userData.locationUpdateRequested = false;
+
+        let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
+        let queryLocationName =
+          queryBase + `&q=${latitude},${longitude}&days=1&aqi=no&alerts=no`;
+        const locationResponse = await fetch(queryLocationName);
+        const locationObj = await locationResponse.json();
+        userData.locationName = locationObj.location.name;
+
+        let query = `http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=${accuweatherKey}`;
+        query += `&q=${latitude},${longitude}`;
+        const response = await fetch(query);
+        const geopositionRes = await response.json();
+        userData.locationID = geopositionRes.Key;
+
+        localStorage.setItem(`${userID}`, JSON.stringify(userData, null, 2));
+      } else {
+        await ctx.reply("я и так знаю где ты сидишь, жми /updatelocation");
+      }
+    }
+
+    await ctx.reply(
+      `ты нахуя туда залез\nв ${userData.locationName}`,
       Markup.removeKeyboard()
     );
   } catch (err) {
