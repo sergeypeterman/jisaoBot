@@ -108,6 +108,7 @@ function getMinuteDescription(userData, minuteReply) {
     hour2.rain > 0
       ? `☔ ${hour2.rain}мм осадков с вероятностью ${hour2.rainChance}%`
       : "";
+      //forecast2hr += `\n\n||limit: ${minuteReply.limit.limitRemain}/${minuteReply.limit.limitTotal}||`;
   return forecast2hr;
 }
 
@@ -115,6 +116,7 @@ async function getForecast2hr(userID = null) {
   const jisaoMinute = {
     summaryPrecipitation: "",
     forecast12hr: [],
+    limit: { limitTotal: 0, LimitRemain: 0 },
   };
 
   let userData;
@@ -138,6 +140,13 @@ async function getForecast2hr(userID = null) {
     let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
     queryMinute += `${userData.location.latitude},${userData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
     const accuResp = await fetch(queryMinute);
+
+    jisaoMinute.limit.limitTotal = accuResp.headers.get("ratelimit-limit");
+    jisaoMinute.limit.limitRemain = accuResp.headers.get("ratelimit-remaining");
+    console.log(
+      `accuweather MinuteCast limit: ${jisaoMinute.limit.limitTotal}/${jisaoMinute.limit.limitRemain}`
+    );
+
     const forecastMinute = await accuResp.json();
     //console.log(JSON.stringify(forecastMinute));
 
@@ -174,12 +183,16 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     let query2days = queryBase + `&q=Parede&days=2&aqi=no&alerts=yes`;
 
     const weatherResponse = await fetch(query2days);
+
+    /* let test = weatherResponse.headers.get(`date`);
+    console.log(weatherResponse.headers)
+    console.log(`test headers ${test}`); */
     const weather = await weatherResponse.json();
     const condResponse = await fetch(
       "https://www.weatherapi.com/docs/conditions.json"
     );
     const conditionResponse = await condResponse.json();
-    console.log(`key: ${weatherKey}`,weather);
+
     const getCondition = getConditionRus(weather.current, conditionResponse);
     const currentCondition =
       getCondition === undefined ? null : `, ${getCondition}`;

@@ -1,5 +1,5 @@
 const { Telegraf, Markup } = require("telegraf");
-const { message } = require('telegraf/filters')
+const { message } = require("telegraf/filters");
 //const fs = require("fs");
 const cron = require("node-cron");
 const {
@@ -43,7 +43,10 @@ jisaoBot.start(async (ctx) => {
 
   //got chat id
   //const test = await ctx.getChat();
-  //await ctx.reply(JSON.stringify(test));
+  //console.log(test);
+   /* await jisaoBot.telegram.sendMessage(test.id, `||пока||`, {
+    parse_mode: "Markdownv2",
+  });  */
 });
 
 //==========HOME WEATHER FORECAST========
@@ -116,6 +119,7 @@ jisaoBot.command("weather2hr", async (ctx) => {
     let forecast2hr = getMinuteDescription(userData, minuteReply);
 
     await ctx.reply(forecast2hr);
+    await ctx.reply(`||limit: ${minuteReply.limit.limitRemain}/${minuteReply.limit.limitTotal}||`, { parse_mode: "Markdownv2" });
   } catch (error) {
     console.log("error:", error);
     ctx.reply(`ошибка ёба`);
