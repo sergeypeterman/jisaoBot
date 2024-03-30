@@ -22,15 +22,26 @@ const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 
 const chatId = process.env.CHAT_ID; //Jisao group id
 
+let accuDefaultLimits = {
+  limitMinute: { limitTotal: 25, limitRemain: 25 },
+  limitCore: { limitTotal: 50, limitRemain: 50 },
+};
 if (typeof localStorage === "undefined" || localStorage === null) {
   var LocalStorage = require("node-localstorage").LocalStorage;
   localStorage = new LocalStorage("./scratch");
 }
 
+const localLimits = localStorage.getItem("limits");
+if (localLimits) {
+  accuDefaultLimits = JSON.parse(localLimits, null, 2);
+} else {
+  localStorage.setItem("limits", JSON.stringify(accuDefaultLimits, null, 2));
+}
+
 let chatData;
 (async () => {
   chatData = await createUser(chatId);
-})(); //all roads lead to Parede. Writing home location for the chat
+})(); //all roads lead to Parede (default home location)
 
 const jisaoBot = new Telegraf(botKeys);
 setBotObject(jisaoBot);
@@ -44,7 +55,7 @@ jisaoBot.start(async (ctx) => {
   //got chat id
   //const test = await ctx.getChat();
   //console.log(test);
-   /* await jisaoBot.telegram.sendMessage(test.id, `||пока||`, {
+  /* await jisaoBot.telegram.sendMessage(test.id, `||пока||`, {
     parse_mode: "Markdownv2",
   });  */
 });
@@ -106,6 +117,9 @@ jisaoBot.command("weather2hr", async (ctx) => {
   try {
     let userID = ctx.from.id;
     const minuteReply = await getForecast2hr(userID);
+    if (minuteReply.error.status) {
+      throw new Error(minuteReply.error.description);
+    }
 
     let userData;
     if (!localStorage.getItem(`${userID}`)) {
@@ -119,7 +133,11 @@ jisaoBot.command("weather2hr", async (ctx) => {
     let forecast2hr = getMinuteDescription(userData, minuteReply);
 
     await ctx.reply(forecast2hr);
-    await ctx.reply(`||limit: ${minuteReply.limit.limitRemain}/${minuteReply.limit.limitTotal}||`, { parse_mode: "Markdownv2" });
+    /* //post limits as well
+    await ctx.reply(
+      `||limit: ${minuteReply.limitMinute.limitRemain}/${minuteReply.limitMinute.limitTotal}||`,
+      { parse_mode: "Markdownv2" }
+    ); */
   } catch (error) {
     console.log("error:", error);
     ctx.reply(`ошибка ёба`);

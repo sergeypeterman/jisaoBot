@@ -10,7 +10,7 @@ module.exports = {
   getConditionRus,
   setBotObject,
 };
-
+const stars = `\n*****************************\n`;
 const chatIdBot = process.env.BOT_ID; //chat-id of my chat with bot
 const weatherKey = process.env.WEATHERAPI_KEY;
 const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
@@ -90,34 +90,71 @@ function create1hrForecastObject(
 }
 
 function getMinuteDescription(userData, minuteReply) {
-  const hour1 = minuteReply.forecast12hr[0];
-  const hour2 = minuteReply.forecast12hr[1];
+  let forecast2hr;
+  if (minuteReply.error.status) {
+    return `ошибка:\n${minuteReply.error.description}`;
+  }
+  if (minuteReply.forecast12hr.length === 0) {
+    console.log(`getMinuteDescription: forecast12hr is empty`);
+    forecast2hr = `прогноз не дали, `;
+    forecast2hr += minuteReply.limitCore.limitRemain
+      ? `лимит общих запросов ${minuteReply.limitCore.limitRemain}/${minuteReply.limitCore.limitTotal}`
+      : `лимит общих запросов тогось, будем плотить?`;
+    forecast2hr += minuteReply.error.status
+      ? `ошибка:\n${minuteReply.error.description}`
+      : "";
+  } else {
+    const hour1 = minuteReply.forecast12hr[0];
+    const hour2 = minuteReply.forecast12hr[1];
 
-  let forecast2hr = `В ${
-    userData.locationName
-  } ${minuteReply.summaryPrecipitation.toLowerCase()}\n\n`;
-  forecast2hr += `В этом часу\n🌡️ ${hour1.temperature}°C, ощущается как ${hour1.realfeel}°C\n`;
-  forecast2hr += `💨 ветер ${hour1.wind}м/с c порывами до ${hour1.windgust}м/с`;
-  forecast2hr +=
-    hour1.rain > 0
-      ? `\n☔ ${hour1.rain}мм осадков с вероятностью ${hour1.rainChance}%`
-      : "";
-  forecast2hr += `\n\nВ следующем часу\n🌡️ ${hour2.temperature}°C, ощущается как ${hour2.realfeel}°C\n`;
-  forecast2hr += `💨 ветер ${hour2.wind}м/с c порывами до ${hour2.windgust}м/с\n`;
-  forecast2hr +=
-    hour2.rain > 0
-      ? `☔ ${hour2.rain}мм осадков с вероятностью ${hour2.rainChance}%`
-      : "";
-      //forecast2hr += `\n\n||limit: ${minuteReply.limit.limitRemain}/${minuteReply.limit.limitTotal}||`;
+    forecast2hr = `В ${
+      userData.locationName
+    } ${minuteReply.summaryPrecipitation.toLowerCase()}\n\n`;
+    forecast2hr += `В этом часу\n🌡️ ${hour1.temperature}°C, ощущается как ${hour1.realfeel}°C\n`;
+    forecast2hr += `💨 ветер ${hour1.wind}м/с c порывами до ${hour1.windgust}м/с`;
+    forecast2hr +=
+      hour1.rain > 0
+        ? `\n☔ ${hour1.rain}мм осадков с вероятностью ${hour1.rainChance}%`
+        : "";
+    forecast2hr += `\n\nВ следующем часу\n🌡️ ${hour2.temperature}°C, ощущается как ${hour2.realfeel}°C\n`;
+    forecast2hr += `💨 ветер ${hour2.wind}м/с c порывами до ${hour2.windgust}м/с\n`;
+    forecast2hr +=
+      hour2.rain > 0
+        ? `☔ ${hour2.rain}мм осадков с вероятностью ${hour2.rainChance}%`
+        : "";
+    //forecast2hr += `\n\n||limit: ${minuteReply.limitMinute.limitRemain}/${minuteReply.limitMinute.limitTotal}||`;
+  }
   return forecast2hr;
+}
+
+function isIterable(obj) {
+  // checks for null and undefined
+  if (obj == null) {
+    return false;
+  }
+  return typeof obj[Symbol.iterator] === "function";
 }
 
 async function getForecast2hr(userID = null) {
   const jisaoMinute = {
     summaryPrecipitation: "",
     forecast12hr: [],
-    limit: { limitTotal: 0, LimitRemain: 0 },
+    limitMinute: { limitTotal: 25, limitRemain: 25 },
+    limitCore: { limitTotal: 50, limitRemain: 50 },
+    error: { status: false, description: "" },
   };
+
+  const localLimits = JSON.parse(localStorage.getItem("limits"));
+  if (localLimits) {
+    jisaoMinute.limitMinute = localLimits.limitMinute;
+    jisaoMinute.limitCore = localLimits.limitCore;
+  }
+  //console.log("getForecast2hr: " + JSON.stringify(localLimits, null, 2));
+  //console.log("getForecast2hr: " + JSON.stringify(jisaoMinute, null, 2));
+  const isLimitCoreReached =
+    jisaoMinute.limitCore.limitRemain == 0 ? true : false;
+  const isLimitMinuteReached =
+    jisaoMinute.limitMinute.limitRemain == 0 ? true : false;
 
   let userData;
   if (!userID) {
@@ -129,33 +166,68 @@ async function getForecast2hr(userID = null) {
       return jisaoMinute;
     } else {
       userData = JSON.parse(localStorage.getItem(`${userID}`));
-      console.log(`user exists ${JSON.stringify(userData, null, 2)}`);
-      //return jisaoMinute;
+      //console.log(`getForecast2hr: user exists ${JSON.stringify(userData, null, 2)}`);
     }
   }
 
   try {
     //getting minutecast. Later draw a line with symbols be 10 mins. --RRRR----RR
     //console.log(userData);
-    let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
-    queryMinute += `${userData.location.latitude},${userData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
-    const accuResp = await fetch(queryMinute);
 
-    jisaoMinute.limit.limitTotal = accuResp.headers.get("ratelimit-limit");
-    jisaoMinute.limit.limitRemain = accuResp.headers.get("ratelimit-remaining");
-    console.log(
-      `accuweather MinuteCast limit: ${jisaoMinute.limit.limitTotal}/${jisaoMinute.limit.limitRemain}`
-    );
+    if (isLimitMinuteReached) {
+      jisaoMinute.summaryPrecipitation = `лимит минутных запросов тогось, будем плотить?`;
+    } else {
+      let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
+      queryMinute += `${userData.location.latitude},${userData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
+      const accuResp = await fetch(queryMinute);
 
-    const forecastMinute = await accuResp.json();
-    //console.log(JSON.stringify(forecastMinute));
+      const forecastMinute = await accuResp.json();
 
-    jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
+      jisaoMinute.limitMinute.limitTotal =
+        accuResp.headers.get("ratelimit-limit");
+      jisaoMinute.limitMinute.limitRemain = accuResp.headers.get(
+        "ratelimit-remaining"
+      );
+      console.log(
+        `getForecast2hr: accuweather MinuteCast limit: ${jisaoMinute.limitMinute.limitRemain}/${jisaoMinute.limitMinute.limitTotal}`
+      );
 
+      if (forecastMinute.Summary.Phrase) {
+        jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
+      } else {
+        jisaoMinute.error.status = true;
+        jisaoMinute.error.description = `Summary.Phrase isn't present in accuResp\n${JSON.stringify(
+          accuResp
+        )}`;
+        throw new Error(jisaoMinute.error.description);
+      }
+    }
+    //----------12 hr------------
+    if (isLimitCoreReached) {
+      return jisaoMinute;
+    }
     let query12hr = `http://dataservice.accuweather.com/forecasts/v1/hourly/12hour/`;
     query12hr += `${userData.locationID}?apikey=${accuweatherKey}&language=ru-ru&details=true&metric=true`;
+    console.log(
+      `fetching 12hr forecast, limitCore: ${jisaoMinute.limitCore.limitRemain}/${jisaoMinute.limitCore.limitTotal}`
+    );
     const accu12Resp = await fetch(query12hr);
     const forecast12hr = await accu12Resp.json();
+    jisaoMinute.limitCore.limitTotal =
+      accu12Resp.headers.get("ratelimit-limit");
+    jisaoMinute.limitCore.limitRemain = accu12Resp.headers.get(
+      "ratelimit-remaining"
+    );
+
+    if (!isIterable(forecast12hr)) {
+      throw new Error(
+        `forecast12hr is not iterable, its value is:\n${JSON.stringify(
+          forecast12hr,
+          null,
+          2
+        )}`
+      );
+    }
 
     for (const hour of forecast12hr) {
       //console.log(hour.Temperature.Value);
@@ -170,9 +242,23 @@ async function getForecast2hr(userID = null) {
       );
       jisaoMinute.forecast12hr.push(hrForecast);
     }
-    console.log(JSON.stringify(jisaoMinute.forecast12hr[0]));
+    localStorage.setItem(
+      `limits`,
+      JSON.stringify(
+        {
+          limitMinute: jisaoMinute.limitMinute,
+          limitCore: jisaoMinute.limitCore,
+        },
+        null,
+        2
+      )
+    );
+    //console.log(JSON.stringify({limitMinute: jisaoMinute.limitMinute,limitCore: jisaoMinute.limitCore,},null,2));
   } catch (err) {
-    console.log(err);
+    jisaoMinute.error.status = true;
+    jisaoMinute.error.description = err;
+    console.log(`'getForecast2hr err: '+${stars}`);
+    console.log(`'getForecast2hr err: '+\n${err}`);
   }
   return jisaoMinute;
 }
