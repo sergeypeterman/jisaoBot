@@ -103,7 +103,7 @@ jisaoBot.command("weathertomorrow", async (ctx) => {
 //==========USER WEATHER FORECAST========
 jisaoBot.command("weather2hr_home", async (ctx) => {
   try {
-    const minuteReply = await getForecast2hr();
+    const minuteReply = await getForecast2hr(chatData.userID);
     let forecast2hr = getMinuteDescription(chatData, minuteReply);
 
     await ctx.reply(forecast2hr);

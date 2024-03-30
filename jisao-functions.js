@@ -135,7 +135,7 @@ function isIterable(obj) {
   return typeof obj[Symbol.iterator] === "function";
 }
 
-async function getForecast2hr(userID = null) {
+async function getForecast2hr(userID) {
   const jisaoMinute = {
     summaryPrecipitation: "",
     forecast12hr: [],
@@ -157,17 +157,14 @@ async function getForecast2hr(userID = null) {
     jisaoMinute.limitMinute.limitRemain == 0 ? true : false;
 
   let userData;
-  if (!userID) {
-    userData = chatData;
+
+  if (!localStorage.getItem(`${userID}`)) {
+    console.log(`user ${userID} doesn't exist`);
+    jisaoMinute.summaryPrecipitation = `user ${userID} doesn't exist`;
+    return jisaoMinute;
   } else {
-    if (!localStorage.getItem(`${userID}`)) {
-      console.log(`user ${userID} doesn't exist`);
-      jisaoMinute.summaryPrecipitation = `user ${userID} doesn't exist`;
-      return jisaoMinute;
-    } else {
-      userData = JSON.parse(localStorage.getItem(`${userID}`));
-      //console.log(`getForecast2hr: user exists ${JSON.stringify(userData, null, 2)}`);
-    }
+    userData = JSON.parse(localStorage.getItem(`${userID}`));
+    //console.log(`getForecast2hr: user exists ${JSON.stringify(userData, null, 2)}`);
   }
 
   try {
