@@ -1,6 +1,6 @@
 {
   "name": "jisaobot",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "tg bot for basic tasks",
   "main": "index.js",
   "scripts": {

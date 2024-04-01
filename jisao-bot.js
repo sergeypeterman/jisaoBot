@@ -48,16 +48,14 @@ setBotObject(jisaoBot);
 
 //---------------START-----------------
 jisaoBot.start(async (ctx) => {
-  await ctx.reply(
-    "Жизяõ ёба хуёба\nДоступные пока команды: \n/weather /weatherToday /weatherTomorrow"
-  );
-
-  //got chat id
-  //const test = await ctx.getChat();
-  //console.log(test);
-  /* await jisaoBot.telegram.sendMessage(test.id, `||пока||`, {
-    parse_mode: "Markdownv2",
-  });  */
+  let replyStart = `Жизяõ ёба хуёба\nДоступные пока команды: 
+  • /weather - автоматический прогноз
+  • /weather2hr_home - прогноз дома на 2 часа
+  • /weather2hr - прогноз в текущей локации на 2 часа
+  • /weathertoday - прогноз на сегодня
+  • /weathertomorrow - погода на завтра
+  • /updatelocation - задать свою локацию`
+  await ctx.reply(replyStart);
 });
 
 //==========HOME WEATHER FORECAST========
@@ -127,7 +125,9 @@ jisaoBot.command("weather2hr", async (ctx) => {
       await ctx.reply(`user ${userID} doesn't exist`);
     } else {
       userData = JSON.parse(localStorage.getItem(`${userID}`));
-      console.log(`weather2hr: user ${userData.userID} exists`);
+      console.log(
+        `weather2hr: requesting forecast for user ${userData.userID}`
+      );
     }
 
     let forecast2hr = getMinuteDescription(userData, minuteReply);
@@ -151,29 +151,44 @@ jisaoBot.command("weather2hr", async (ctx) => {
 jisaoBot.command("updatelocation", async (ctx) => {
   try {
     let userID = ctx.from.id;
+    let chatID = ctx.chat.id;
     const checkUserExist = localStorage.getItem(`${userID}`);
     if (!checkUserExist) {
-      console.log(`user ${userID} doesn't exist`);
-      await ctx.reply(`user ${userID} doesn't exist, creating new user`);
+      console.log(
+        `command->updatelocation: user ${userID} doesn't exist, creating one`
+      );
+      await ctx.reply(`ты кто, ${userID}? Записываем-с`);
       const newUser = await createUser(userID);
       newUser.locationUpdateRequested = true;
       console.log(
-        `user ${newUser.userID} created, default location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
+        `command->updatelocation: user ${newUser.userID} created, default location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
       );
     } else {
       userData = JSON.parse(checkUserExist);
       userData.locationUpdateRequested = true;
-      console.log(`user exists ${JSON.stringify(userData, null, 2)}`);
+      console.log(
+        `command->updatelocation: setting locationUpdateRequested=true ${JSON.stringify(
+          userData,
+          null,
+          2
+        )}`
+      );
       localStorage.setItem(
         `${userData.userID}`,
         JSON.stringify(userData, null, 2)
       );
     }
 
-    await ctx.reply(
-      "ты где ферзь",
-      Markup.keyboard([Markup.button.locationRequest("туть")]).resize()
-    );
+    if (chatID > 0) {
+      //if we're in chat, not group
+      await ctx.reply(
+        "ты где ферзь",
+        Markup.keyboard([Markup.button.locationRequest("туть")]).resize()
+      );
+    } else if (chatID < 0) {
+      //we're in group
+      await ctx.reply(`ты где ферзь (шли локацию)`);
+    }
   } catch (error) {
     console.log("error:", error);
     ctx.reply(`ошибка ёба`);
@@ -191,14 +206,16 @@ jisaoBot.on(message("location"), async (ctx) => {
 
     if (!checkUserExist) {
       console.log(`user ${userID} doesn't exist`);
-      await ctx.reply(`user ${userID} doesn't exist, creating new user`);
+      await ctx.reply(`Юзера №${userID} не знаемс, создаём`);
       const newUser = await createUser(userID, {
         latitude: latitude,
         longitude: longitude,
       });
-      await ctx.reply(
-        `user ${newUser.userID} created, location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
+      console.log(
+        `on(message("location"))-> user ${newUser.userID} created, location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
       );
+      await ctx.reply(`попався в ${newUser.locationName}`);
+
       userData = newUser;
     } else {
       userData = JSON.parse(checkUserExist);
@@ -223,7 +240,9 @@ jisaoBot.on(message("location"), async (ctx) => {
 
         localStorage.setItem(`${userID}`, JSON.stringify(userData, null, 2));
       } else {
-        await ctx.reply("я и так знаю где ты сидишь, жми /updatelocation");
+        await ctx.reply(
+          "я и так знаю где ты сидишь, если перелез, жми /updatelocation"
+        );
       }
     }
 
@@ -235,6 +254,17 @@ jisaoBot.on(message("location"), async (ctx) => {
     console.log(err);
     await ctx.reply("ошибка ёба");
   }
+});
+
+//reacts on text
+jisaoBot.on(message(`text`), async (ctx) => {
+  await ctx.reply(
+    `ctx.from.id: ${ctx.from.id}, chat:${ctx.chat.id},\nctx: ${JSON.stringify(
+      ctx.update,
+      null,
+      2
+    )}`
+  );
 });
 
 //---------------CRON-----------------

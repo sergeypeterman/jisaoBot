@@ -107,9 +107,31 @@ function getMinuteDescription(userData, minuteReply) {
     const hour1 = minuteReply.forecast12hr[0];
     const hour2 = minuteReply.forecast12hr[1];
 
+    let precipString = "подробностей не дали";
+    if (minuteReply.minuteSummary.length > 0) {
+      let precipArr = Array(12).fill(minuteReply.minuteSummary[0].type);
+
+      console.log(
+        `getMinuteDescription: minuteReply.minuteSummary.length = ${
+          minuteReply.minuteSummary.length
+        } \n ${JSON.stringify(minuteReply.minuteSummary, null, 2)}`
+      );
+
+      //filling 10-minutes blocks with precipitation types
+      for (let i = 1; i < minuteReply.minuteSummary.length; i++) {
+        let minutes10 = Math.floor(
+          minuteReply.minuteSummary[i].startMinute / 10
+        );
+        for (let j = minutes10; j < precipArr.length; j++) {
+          precipArr[j] = minuteReply.minuteSummary[i].type;
+        }
+      }
+      precipString = precipArr.join("");
+    }
+
     forecast2hr = `В ${
       userData.locationName
-    } ${minuteReply.summaryPrecipitation.toLowerCase()}\n\n`;
+    } ${minuteReply.summaryPrecipitation.toLowerCase()}\n${precipString}\n\n`;
     forecast2hr += `В этом часу\n🌡️ ${hour1.temperature}°C, ощущается как ${hour1.realfeel}°C\n`;
     forecast2hr += `💨 ветер ${hour1.wind}м/с c порывами до ${hour1.windgust}м/с`;
     forecast2hr +=
@@ -135,9 +157,31 @@ function isIterable(obj) {
   return typeof obj[Symbol.iterator] === "function";
 }
 
+function getMinuteEmoji(id) {
+  switch (id) {
+    case null:
+      return "🌂";
+    case 0:
+      return "🌂";
+    case 1:
+      return "💧";
+    case 3:
+      return "🧊";
+    case 2:
+      return "❄️";
+    case 6:
+      return "☔";
+    case 18:
+      return "⛈️";
+    case 35:
+      return "💦";
+  }
+}
+
 async function getForecast2hr(userID) {
   const jisaoMinute = {
     summaryPrecipitation: "",
+    minuteSummary: [],
     forecast12hr: [],
     limitMinute: { limitTotal: 25, limitRemain: 25 },
     limitCore: { limitTotal: 50, limitRemain: 50 },
@@ -168,7 +212,7 @@ async function getForecast2hr(userID) {
   }
 
   try {
-    //getting minutecast. Later draw a line with symbols be 10 mins. --RRRR----RR
+    //getting minutecast from accuweather. Later draw a line with symbols be 10 mins. --RRRR----RR
     //console.log(userData);
 
     if (isLimitMinuteReached) {
@@ -177,7 +221,6 @@ async function getForecast2hr(userID) {
       let queryMinute = `http://dataservice.accuweather.com/forecasts/v1/minute?q=`;
       queryMinute += `${userData.location.latitude},${userData.location.longitude}&apikey=${accuweatherMinuteKey}&&language=ru-ru`;
       const accuResp = await fetch(queryMinute);
-
       const forecastMinute = await accuResp.json();
 
       jisaoMinute.limitMinute.limitTotal =
@@ -191,6 +234,15 @@ async function getForecast2hr(userID) {
 
       if (forecastMinute.Summary.Phrase) {
         jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
+        if (forecastMinute.Summaries.length > 0) {
+          for (let sum of forecastMinute.Summaries) {
+            const type = getMinuteEmoji(sum.TypeId);
+            jisaoMinute.minuteSummary.push({
+              startMinute: sum.StartMinute,
+              type: type,
+            });
+          }
+        }
       } else {
         jisaoMinute.error.status = true;
         jisaoMinute.error.description = `Summary.Phrase isn't present in accuResp\n${JSON.stringify(
