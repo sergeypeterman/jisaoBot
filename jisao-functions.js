@@ -1,4 +1,6 @@
 require("dotenv").config();
+const fs = require("fs");
+const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 module.exports = {
   createUser,
   create1hrForecastObject,
@@ -9,6 +11,7 @@ module.exports = {
   getJisaoDescription,
   getConditionRus,
   setBotObject,
+  getChart,
 };
 const stars = `\n*****************************\n`;
 const chatIdBot = process.env.BOT_ID; //chat-id of my chat with bot
@@ -110,12 +113,6 @@ function getMinuteDescription(userData, minuteReply) {
     let precipString = "подробностей не дали";
     if (minuteReply.minuteSummary.length > 0) {
       let precipArr = Array(12).fill(minuteReply.minuteSummary[0].type);
-
-      console.log(
-        `getMinuteDescription: minuteReply.minuteSummary.length = ${
-          minuteReply.minuteSummary.length
-        } \n ${JSON.stringify(minuteReply.minuteSummary, null, 2)}`
-      );
 
       //filling 10-minutes blocks with precipitation types
       for (let i = 1; i < minuteReply.minuteSummary.length; i++) {
@@ -479,4 +476,47 @@ function getConditionRus(day, codeList) {
       : conditionObjRus.day_text.toLowerCase();
 
   return conditionRus;
+}
+
+async function getChart(filename, data = {}) {
+  const width = 800; //px
+  const height = 400; //px
+  const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
+  const chartJSNodeCanvas = new ChartJSNodeCanvas({
+    width,
+    height,
+    backgroundColour,
+  });
+  data = {
+    labels: ["January", "February", "March", "April", "May", "June", "July"],
+    datasets: [
+      {
+        label: "My Dataset",
+        data: [65, 59, 80, 81, 56, 55, 40],
+        fill: {
+          target: "origin",
+          above: "rgb(134, 162, 214)", // Area will be red above the origin
+        },
+        borderColor: "rgb(102, 123, 163)",
+        tension: 0.1,
+        pointRadius: 0,
+      },
+    ],
+  };
+
+  const configuration = {
+    type: "line",
+    data: data,
+    options: {},
+    plugins: [],
+  };
+  const image = await chartJSNodeCanvas.renderToBuffer(configuration);
+
+  const directory = "temp-images"; // Specify the directory where you want to save the file
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory);
+  }
+  fs.writeFileSync(`${directory}/${filename}`, image);
+
+  return true;
 }

@@ -12,6 +12,7 @@ const {
   getJisaoDescription,
   getConditionRus,
   setBotObject,
+  getChart,
 } = require("./jisao-functions");
 
 require("dotenv").config();
@@ -54,7 +55,7 @@ jisaoBot.start(async (ctx) => {
   • /weather2hr - прогноз в текущей локации на 2 часа
   • /weathertoday - прогноз на сегодня
   • /weathertomorrow - погода на завтра
-  • /updatelocation - задать свою локацию`
+  • /updatelocation - задать свою локацию`;
   await ctx.reply(replyStart);
 });
 
@@ -265,6 +266,9 @@ jisaoBot.on(message(`text`), async (ctx) => {
       2
     )}`
   );
+  if (await getChart(`chart.png`)) {
+    await ctx.replyWithPhoto({ source: `temp-images/chart.png` });
+  }
 });
 
 //---------------CRON-----------------
