@@ -27,6 +27,7 @@ const chatId = process.env.CHAT_ID; //Jisao group id
 let accuDefaultLimits = {
   limitMinute: { limitTotal: 25, limitRemain: 25 },
   limitCore: { limitTotal: 50, limitRemain: 50 },
+  limitPirate: { limitTotal: 10000, limitRemain: 10000 },
 };
 if (typeof localStorage === "undefined" || localStorage === null) {
   var LocalStorage = require("node-localstorage").LocalStorage;

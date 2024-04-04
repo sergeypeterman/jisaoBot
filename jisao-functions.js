@@ -569,6 +569,8 @@ async function getPirateForecast2hr(userID) {
   const localLimits = JSON.parse(localStorage.getItem("limits"));
   if (localLimits) {
     jisaoMinute.limitPirate = localLimits.limitPirate;
+    jisaoMinute.limitCore = localLimits.limitCore;
+    jisaoMinute.limitMinute = localLimits.limitMinute;
   }
   const isLimitPirateReached =
     jisaoMinute.limitPirate.limitRemain == 0 ? true : false;
@@ -592,6 +594,20 @@ async function getPirateForecast2hr(userID) {
       console.log(
         `getPirateForecast2hr: PirateWeather limit: ${jisaoMinute.limitPirate.limitRemain}/${jisaoMinute.limitPirate.limitTotal}`
       );
+
+      localStorage.setItem(
+        `limits`,
+        JSON.stringify(
+          {
+            limitMinute: jisaoMinute.limitMinute,
+            limitCore: jisaoMinute.limitCore,
+            limitPirate: jisaoMinute.limitPirate,
+          },
+          null,
+          2
+        )
+      );
+
       jisaoMinute.summaryPrecipitation = response.minutely.summary;
       data = response.minutely.data.reduce(
         (acc, item, ind) => {
