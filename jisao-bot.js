@@ -1,6 +1,6 @@
 const { Telegraf, Markup } = require("telegraf");
 const { message } = require("telegraf/filters");
-//const fs = require("fs");
+const fs = require("fs");
 const cron = require("node-cron");
 const {
   createUser,
@@ -13,6 +13,7 @@ const {
   getConditionRus,
   setBotObject,
   getChart,
+  getPirateForecast2hr,
 } = require("./jisao-functions");
 
 require("dotenv").config();
@@ -266,9 +267,18 @@ jisaoBot.on(message(`text`), async (ctx) => {
       2
     )}`
   );
-  if (await getChart(`chart.png`)) {
-    await ctx.replyWithPhoto({ source: `temp-images/chart.png` });
-  }
+  const jisMin = await getPirateForecast2hr(ctx.from.id);
+  ctx.reply(jisMin.summaryPrecipitation);
+
+  const chartFilename = `temp-images/chart.png`;
+  fs.access(chartFilename, fs.constants.F_OK, async (err) => {
+    if (err) {
+      console.error(`${filePath} does not exist`);
+      ctx.reply(`график тогось`);
+    } else {
+      await ctx.replyWithPhoto({ source: chartFilename });
+    }
+  });
 });
 
 //---------------CRON-----------------

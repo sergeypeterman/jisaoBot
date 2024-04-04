@@ -1,6 +1,7 @@
 require("dotenv").config();
 const fs = require("fs");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
+const { title } = require("process");
 module.exports = {
   createUser,
   create1hrForecastObject,
@@ -12,12 +13,14 @@ module.exports = {
   getConditionRus,
   setBotObject,
   getChart,
+  getPirateForecast2hr,
 };
 const stars = `\n*****************************\n`;
 const chatIdBot = process.env.BOT_ID; //chat-id of my chat with bot
 const weatherKey = process.env.WEATHERAPI_KEY;
 const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
 const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
+const pirateWeatherKey = process.env.P_WEATHER_KEY;
 
 let jisaoBot;
 function setBotObject(botObject) {
@@ -175,6 +178,19 @@ function getMinuteEmoji(id) {
   }
 }
 
+function getUser(userID) {
+  let userData;
+
+  if (!localStorage.getItem(`${userID}`)) {
+    console.log(`user ${userID} doesn't exist`);
+    return null;
+  } else {
+    userData = JSON.parse(localStorage.getItem(`${userID}`));
+    //console.log(`getForecast2hr: user exists ${JSON.stringify(userData, null, 2)}`);
+  }
+  return userData;
+}
+
 async function getForecast2hr(userID) {
   const jisaoMinute = {
     summaryPrecipitation: "",
@@ -197,15 +213,11 @@ async function getForecast2hr(userID) {
   const isLimitMinuteReached =
     jisaoMinute.limitMinute.limitRemain == 0 ? true : false;
 
-  let userData;
+  let userData = getUser(userID);
 
-  if (!localStorage.getItem(`${userID}`)) {
-    console.log(`user ${userID} doesn't exist`);
+  if (!userData) {
     jisaoMinute.summaryPrecipitation = `user ${userID} doesn't exist`;
     return jisaoMinute;
-  } else {
-    userData = JSON.parse(localStorage.getItem(`${userID}`));
-    //console.log(`getForecast2hr: user exists ${JSON.stringify(userData, null, 2)}`);
   }
 
   try {
@@ -478,7 +490,7 @@ function getConditionRus(day, codeList) {
   return conditionRus;
 }
 
-async function getChart(filename, data = {}) {
+async function getChart(filename, inputData = {}) {
   const width = 800; //px
   const height = 400; //px
   const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
@@ -487,16 +499,26 @@ async function getChart(filename, data = {}) {
     height,
     backgroundColour,
   });
-  data = {
-    labels: ["January", "February", "March", "April", "May", "June", "July"],
+  const data = {
+    labels: inputData.minutes,
     datasets: [
       {
-        label: "My Dataset",
-        data: [65, 59, 80, 81, 56, 55, 40],
+        type: "line",
+        label: "мм/ч",
+        data: inputData.precipIntensity60,
         fill: {
           target: "origin",
           above: "rgb(134, 162, 214)", // Area will be red above the origin
         },
+        //borderColor: "rgb(102, 123, 163)",
+        tension: 0.1,
+        pointRadius: 0,
+      },
+      {
+        type: "line",
+        label: "% вероятность",
+        data: inputData.precipProbability60,
+        fill: false,
         borderColor: "rgb(102, 123, 163)",
         tension: 0.1,
         pointRadius: 0,
@@ -505,9 +527,14 @@ async function getChart(filename, data = {}) {
   };
 
   const configuration = {
-    type: "line",
+
     data: data,
-    options: {},
+    options: {
+      scales: { y: { suggestedMin: 0, suggestedMax: 1 } },
+      plugins: {
+        title: { display: true, text: "Я не плачу, это просто дощь" },
+      },
+    },
     plugins: [],
   };
   const image = await chartJSNodeCanvas.renderToBuffer(configuration);
@@ -519,4 +546,68 @@ async function getChart(filename, data = {}) {
   fs.writeFileSync(`${directory}/${filename}`, image);
 
   return true;
+}
+
+//possible exclusion:
+//['currently', 'minutely', 'hourly', 'daily', 'alerts']
+async function getPirateForecast2hr(userID) {
+  const userData = getUser(userID);
+
+  const jisaoMinute = {
+    summaryPrecipitation: "чот пошло не так",
+    minuteSummary: [],
+    forecast12hr: [],
+    limitPirate: { limitTotal: 10000, limitRemain: 10000 },
+    error: { status: false, description: "" },
+  };
+
+  if (!userData) {
+    jisaoMinute.summaryPrecipitation = `user ${userID} doesn't exist`;
+    return jisaoMinute;
+  }
+
+  const localLimits = JSON.parse(localStorage.getItem("limits"));
+  if (localLimits) {
+    jisaoMinute.limitPirate = localLimits.limitPirate;
+  }
+  const isLimitPirateReached =
+    jisaoMinute.limitPirate.limitRemain == 0 ? true : false;
+
+  //units = si, query gets 24hr of data. For 168hrs ?extend=true
+  //unsing munich for tests 48.137154,11.576124
+  //${userData.location.latitude},${userData.location.longitude}
+  let data = { precipIntensity60: [], precipProbability60: [], minutes: [] };
+  try {
+    if (isLimitPirateReached) {
+      jisaoMinute.summaryPrecipitation = `лимит пиратских запросов тогось, будем плотить?`;
+    } else {
+      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/48.137154,11.576124?units=si&exclude=[daily,alerts]`;
+      const res = await fetch(pirateQuery);
+      const response = await res.json();
+
+      jisaoMinute.limitPirate.limitTotal = res.headers.get("RateLimit-Limit");
+      jisaoMinute.limitPirate.limitRemain = res.headers.get(
+        "RateLimit-Remaining"
+      );
+      console.log(
+        `getPirateForecast2hr: PirateWeather limit: ${jisaoMinute.limitPirate.limitRemain}/${jisaoMinute.limitPirate.limitTotal}`
+      );
+      jisaoMinute.summaryPrecipitation = response.minutely.summary;
+      data = response.minutely.data.reduce(
+        (acc, item, ind) => {
+          acc.precipIntensity60.push(item.precipIntensity);
+          acc.precipProbability60.push(item.precipProbability);
+          acc.minutes.push(ind);
+          return acc;
+        },
+        { precipIntensity60: [], precipProbability60: [], minutes: [] }
+      );
+      console.log(JSON.stringify(data));
+      await getChart(`chart.png`, data);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+
+  return jisaoMinute;
 }
