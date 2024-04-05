@@ -22,14 +22,24 @@ const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
 const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 const pirateWeatherKey = process.env.P_WEATHER_KEY;
 
+//default api limits
+class APILimits {
+  constructor(limitMinute = 25, limitCore = 50, limitPirate = 10000) {
+    this.limitMinute = { limitTotal: limitMinute, limitRemain: limitMinute };
+    this.limitCore = { limitTotal: limitCore, limitRemain: limitCore };
+    this.limitPirate = { limitTotal: limitPirate, limitRemain: limitPirate };
+  }
+}
+
 let jisaoBot;
 function setBotObject(botObject) {
   jisaoBot = botObject;
 }
 
+//new User datatype instance
 async function createUser(
   userID,
-  location = { latitude: 38.686116, longitude: -9.349137 }
+  location = { latitude: 38.686116, longitude: -9.349137 } //Parede by default
 ) {
   const newUser = {
     userID: userID,
@@ -39,6 +49,7 @@ async function createUser(
     locationName: "",
   };
 
+  //checking if user already exists locally and located in the same location
   const checkUserExist = localStorage.getItem(`${userID}`);
   if (checkUserExist) {
     const existingUser = JSON.parse(checkUserExist);
@@ -53,7 +64,7 @@ async function createUser(
   }
 
   try {
-    console.log("createUser(): getting location name and ID");
+    console.log("createUser(): getting location ID and name");
     let query = `http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=${accuweatherKey}`;
     query += `&q=${newUser.location.latitude},${newUser.location.longitude}`;
     const response = await fetch(query);
@@ -73,6 +84,7 @@ async function createUser(
   return await newUser;
 }
 
+//datatype for hourly forecasts
 function create1hrForecastObject(
   temperature = 0,
   realfeel = 0,
@@ -95,16 +107,79 @@ function create1hrForecastObject(
   return forecast1hr;
 }
 
+//datatype for minute forecasts
+function createMinuteObj() {
+  const jisaoMinute = {
+    summaryPrecipitation: "",
+    minuteSummary: [],
+    forecast12hr: [],
+    error: { status: false, description: "" },
+  };
+}
+
+//reads limits from local file, or returns a default object if there is none
+function getLimits() {
+  const limits = new APILimits();
+
+  //writing limits from disk to the object
+  const localLimits = JSON.parse(localStorage.getItem("limits"));
+  if (localLimits) {
+    Object.keys(limits).map((aLimit) => {
+      if (Object.hasOwn(localLimits, aLimit)) {
+        limits[aLimit] = localLimits[aLimit];
+      } else {
+        console.log(
+          `getLimits: ${aLimit} is not present on disk, assigning defalt value. Use setLimits to write it`
+        );
+      }
+    });
+  } else {
+    console.log(
+      "getLimits: there is no local file with limits, use setLimits to write it"
+    );
+  }
+
+  return limits;
+}
+
+//write limits to the local file. If some fields aren't present, write local, or default
+function setLimits(limits) {
+  const localLimits = JSON.parse(localStorage.getItem("limits"));
+  const limitsToWrite = new APILimits();
+
+  if (limits && typeof limits === "object") {
+    Object.keys(limitsToWrite).map((aLimit) => {
+      if (Object.hasOwn(limits, aLimit)) {
+        limitsToWrite[aLimit].limitTotal = limits[aLimit].limitTotal;
+        limitsToWrite[aLimit].limitRemain = limits[aLimit].limitRemain;
+      } else if (Object.hasOwn(localLimits, aLimit)) {
+        limitsToWrite[aLimit].limitTotal = localLimits[aLimit].limitTotal;
+        limitsToWrite[aLimit].limitRemain = localLimits[aLimit].limitRemain;
+      } else {
+        console.log(
+          `setLimits: ${aLimit} is not present locally and in the passed limits, writing default`
+        );
+      }
+    });
+    localStorage.setItem("limits", JSON.stringify(limitsToWrite, null, 2));
+  } else {
+    console.log(
+      `setLimits: ${limits} are not an object, nothing is written on disk`
+    );
+  }
+}
+
 function getMinuteDescription(userData, minuteReply) {
   let forecast2hr;
+  const limits = getLimits();
   if (minuteReply.error.status) {
     return `ошибка:\n${minuteReply.error.description}`;
   }
   if (minuteReply.forecast12hr.length === 0) {
     console.log(`getMinuteDescription: forecast12hr is empty`);
     forecast2hr = `прогноз не дали, `;
-    forecast2hr += minuteReply.limitCore.limitRemain
-      ? `лимит общих запросов ${minuteReply.limitCore.limitRemain}/${minuteReply.limitCore.limitTotal}`
+    forecast2hr += limits.limitCore.limitRemain
+      ? `лимит общих запросов ${limits.limitCore.limitRemain}/${limits.limitCore.limitTotal}`
       : `лимит общих запросов тогось, будем плотить?`;
     forecast2hr += minuteReply.error.status
       ? `ошибка:\n${minuteReply.error.description}`
@@ -144,7 +219,7 @@ function getMinuteDescription(userData, minuteReply) {
       hour2.rain > 0
         ? `☔ ${hour2.rain}мм осадков с вероятностью ${hour2.rainChance}%`
         : "";
-    //forecast2hr += `\n\n||limit: ${minuteReply.limitMinute.limitRemain}/${minuteReply.limitMinute.limitTotal}||`;
+    //forecast2hr += `\n\n||limit: ${limits.limitMinute.limitRemain}/${limits.limitMinute.limitTotal}||`;
   }
   return forecast2hr;
 }
@@ -196,22 +271,14 @@ async function getForecast2hr(userID) {
     summaryPrecipitation: "",
     minuteSummary: [],
     forecast12hr: [],
-    limitMinute: { limitTotal: 25, limitRemain: 25 },
-    limitCore: { limitTotal: 50, limitRemain: 50 },
     error: { status: false, description: "" },
   };
 
-  const localLimits = JSON.parse(localStorage.getItem("limits"));
-  if (localLimits) {
-    jisaoMinute.limitMinute = localLimits.limitMinute;
-    jisaoMinute.limitCore = localLimits.limitCore;
-  }
-  //console.log("getForecast2hr: " + JSON.stringify(localLimits, null, 2));
-  //console.log("getForecast2hr: " + JSON.stringify(jisaoMinute, null, 2));
-  const isLimitCoreReached =
-    jisaoMinute.limitCore.limitRemain == 0 ? true : false;
+  const limits = getLimits();
+
+  const isLimitCoreReached = limits.limitCore.limitRemain == 0 ? true : false;
   const isLimitMinuteReached =
-    jisaoMinute.limitMinute.limitRemain == 0 ? true : false;
+    limits.limitMinute.limitRemain == 0 ? true : false;
 
   let userData = getUser(userID);
 
@@ -232,13 +299,12 @@ async function getForecast2hr(userID) {
       const accuResp = await fetch(queryMinute);
       const forecastMinute = await accuResp.json();
 
-      jisaoMinute.limitMinute.limitTotal =
-        accuResp.headers.get("ratelimit-limit");
-      jisaoMinute.limitMinute.limitRemain = accuResp.headers.get(
+      limits.limitMinute.limitTotal = accuResp.headers.get("ratelimit-limit");
+      limits.limitMinute.limitRemain = accuResp.headers.get(
         "ratelimit-remaining"
       );
       console.log(
-        `getForecast2hr: accuweather MinuteCast limit: ${jisaoMinute.limitMinute.limitRemain}/${jisaoMinute.limitMinute.limitTotal}`
+        `getForecast2hr: accuweather MinuteCast limit: ${limits.limitMinute.limitRemain}/${limits.limitMinute.limitTotal}`
       );
 
       if (forecastMinute.Summary.Phrase) {
@@ -262,18 +328,18 @@ async function getForecast2hr(userID) {
     }
     //----------12 hr------------
     if (isLimitCoreReached) {
+      setLimits(limits);
       return jisaoMinute;
     }
     let query12hr = `http://dataservice.accuweather.com/forecasts/v1/hourly/12hour/`;
     query12hr += `${userData.locationID}?apikey=${accuweatherKey}&language=ru-ru&details=true&metric=true`;
     console.log(
-      `fetching 12hr forecast, limitCore: ${jisaoMinute.limitCore.limitRemain}/${jisaoMinute.limitCore.limitTotal}`
+      `fetching 12hr forecast, limitCore: ${limits.limitCore.limitRemain}/${limits.limitCore.limitTotal}`
     );
     const accu12Resp = await fetch(query12hr);
     const forecast12hr = await accu12Resp.json();
-    jisaoMinute.limitCore.limitTotal =
-      accu12Resp.headers.get("ratelimit-limit");
-    jisaoMinute.limitCore.limitRemain = accu12Resp.headers.get(
+    limits.limitCore.limitTotal = accu12Resp.headers.get("ratelimit-limit");
+    limits.limitCore.limitRemain = accu12Resp.headers.get(
       "ratelimit-remaining"
     );
 
@@ -300,17 +366,7 @@ async function getForecast2hr(userID) {
       );
       jisaoMinute.forecast12hr.push(hrForecast);
     }
-    localStorage.setItem(
-      `limits`,
-      JSON.stringify(
-        {
-          limitMinute: jisaoMinute.limitMinute,
-          limitCore: jisaoMinute.limitCore,
-        },
-        null,
-        2
-      )
-    );
+    setLimits(limits);
     //console.log(JSON.stringify({limitMinute: jisaoMinute.limitMinute,limitCore: jisaoMinute.limitCore,},null,2));
   } catch (err) {
     jisaoMinute.error.status = true;
@@ -527,7 +583,6 @@ async function getChart(filename, inputData = {}) {
   };
 
   const configuration = {
-
     data: data,
     options: {
       scales: { y: { suggestedMin: 0, suggestedMax: 1 } },
@@ -557,7 +612,6 @@ async function getPirateForecast2hr(userID) {
     summaryPrecipitation: "чот пошло не так",
     minuteSummary: [],
     forecast12hr: [],
-    limitPirate: { limitTotal: 10000, limitRemain: 10000 },
     error: { status: false, description: "" },
   };
 
@@ -566,14 +620,10 @@ async function getPirateForecast2hr(userID) {
     return jisaoMinute;
   }
 
-  const localLimits = JSON.parse(localStorage.getItem("limits"));
-  if (localLimits) {
-    jisaoMinute.limitPirate = localLimits.limitPirate;
-    jisaoMinute.limitCore = localLimits.limitCore;
-    jisaoMinute.limitMinute = localLimits.limitMinute;
-  }
+  const limits = getLimits();
+
   const isLimitPirateReached =
-    jisaoMinute.limitPirate.limitRemain == 0 ? true : false;
+    limits.limitPirate.limitRemain == 0 ? true : false;
 
   //units = si, query gets 24hr of data. For 168hrs ?extend=true
   //unsing munich for tests 48.137154,11.576124
@@ -582,31 +632,18 @@ async function getPirateForecast2hr(userID) {
   try {
     if (isLimitPirateReached) {
       jisaoMinute.summaryPrecipitation = `лимит пиратских запросов тогось, будем плотить?`;
-    } else {
+    } else { //hardcoded location for now
       const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/48.137154,11.576124?units=si&exclude=[daily,alerts]`;
       const res = await fetch(pirateQuery);
       const response = await res.json();
 
-      jisaoMinute.limitPirate.limitTotal = res.headers.get("RateLimit-Limit");
-      jisaoMinute.limitPirate.limitRemain = res.headers.get(
-        "RateLimit-Remaining"
-      );
+      limits.limitPirate.limitTotal = res.headers.get("RateLimit-Limit");
+      limits.limitPirate.limitRemain = res.headers.get("RateLimit-Remaining");
       console.log(
-        `getPirateForecast2hr: PirateWeather limit: ${jisaoMinute.limitPirate.limitRemain}/${jisaoMinute.limitPirate.limitTotal}`
+        `getPirateForecast2hr: PirateWeather limit: ${limits.limitPirate.limitRemain}/${limits.limitPirate.limitTotal}`
       );
 
-      localStorage.setItem(
-        `limits`,
-        JSON.stringify(
-          {
-            limitMinute: jisaoMinute.limitMinute,
-            limitCore: jisaoMinute.limitCore,
-            limitPirate: jisaoMinute.limitPirate,
-          },
-          null,
-          2
-        )
-      );
+      setLimits(limits);
 
       jisaoMinute.summaryPrecipitation = response.minutely.summary;
       data = response.minutely.data.reduce(
