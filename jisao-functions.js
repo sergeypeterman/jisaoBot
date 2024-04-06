@@ -533,8 +533,6 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
   }
 }
 
-//weather for next 120 mins, Accuweater
-
 //unversal function, maybe it's excessive
 async function getForecast(provider = "accuweather") {}
 
@@ -658,11 +656,7 @@ async function getDayChart(filename, inputData = {}) {
   const width = 900; //px
   const height = 300; //px
   const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
-  const canvasAir = new ChartJSNodeCanvas({
-    width,
-    height,
-    backgroundColour,
-  });
+
   const canvasSun = new ChartJSNodeCanvas({
     width,
     height,
@@ -691,10 +685,10 @@ async function getDayChart(filename, inputData = {}) {
         type: "line",
         label: "",
         data: inputData.uv,
-        //fill: false,
+        borderWidth: 0.5,
         borderColor: colors.uv,
         backgroundColor: colors.uvBack,
-        tension: 0.1,
+        tension: 0.5,
         pointRadius: 0,
         yAxisID: "yr",
       },
@@ -826,65 +820,6 @@ async function getDayChart(filename, inputData = {}) {
     plugins: [],
   };
 
-  /*   const dataAir = {
-    labels: inputData.num,
-    datasets: [
-      {
-        type: "line",
-        label: "",
-        data: inputData.humid,
-        fill: false,
-        borderColor: colors.darkPrecip,
-        tension: 0.1,
-        pointRadius: 0,
-        yAxisID: "yr",
-      },
-      {
-        type: "line",
-        label: "",
-        data: inputData.realfeel,
-        borderColor: colors.temperature,
-        backgroundColor: colors.temperatureFill,
-        tension: 0.1,
-        pointRadius: 0,
-        yAxisID: "yl",
-      },
-    ],
-  };
-
-  const configurationAir = {
-    data: dataAir,
-    options: {
-      scales: {
-        yr: {
-          title: {
-            display: true,
-            text: "Отн. влажность, %",
-            color: colors.darkPrecip,
-          },
-          suggestedMin: 0,
-          suggestedMax: 100,
-          position: "right",
-        },
-        yl: {
-          title: {
-            display: true,
-            text: "Ощущается как, °С",
-            color: colors.temperature,
-          },
-          suggestedMin: 0,
-          suggestedMax: 30,
-          position: "left",
-        },
-      },
-      plugins: {
-        title: { display: true, text: "СИЛА ВОЗДУХА" },
-        legend: { display: false },
-      },
-      fill: true,
-    },
-    plugins: [],
-  }; */
   const sunImage = await canvasSun.renderToBuffer(configurationSun);
   const waterImage = await canvasWater.renderToBuffer(configurationWater);
 
