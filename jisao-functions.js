@@ -12,8 +12,10 @@ module.exports = {
   getJisaoDescription,
   getConditionRus,
   setBotObject,
-  getChart,
+  getMinuteChart,
+  getDayChart,
   getPirateForecast2hr,
+  getLocationDescription,
 };
 const stars = `\n*****************************\n`;
 const chatIdBot = process.env.BOT_ID; //chat-id of my chat with bot
@@ -475,6 +477,9 @@ function leadingZero(num) {
   return withZero.slice(-2);
 }
 
+class JisaoDay {
+  constructor() {}
+}
 //describe jisao, returns object with ready to post description
 function getJisaoDescription(day, codeList) {
   const jisao = {
@@ -579,7 +584,7 @@ function getConditionRus(day, codeList) {
   return conditionRus;
 }
 
-async function getChart(filename, inputData = {}) {
+async function getDayChart(filename, inputData = {}) {
   const width = 800; //px
   const height = 400; //px
   const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
@@ -595,11 +600,8 @@ async function getChart(filename, inputData = {}) {
         type: "line",
         label: "мм/ч",
         data: inputData.precipIntensity,
-        fill: {
-          target: "origin",
-          above: "rgb(134, 162, 214)", // Area will be red above the origin
-        },
-        //borderColor: "rgb(102, 123, 163)",
+
+        backgroundColor: "rgb(134, 162, 214)",
         tension: 0.1,
         pointRadius: 0,
       },
@@ -620,8 +622,64 @@ async function getChart(filename, inputData = {}) {
     options: {
       scales: { y: { suggestedMin: 0, suggestedMax: 1 } },
       plugins: {
-        title: { display: true, text: "Я не плачу, это просто дощь" },
+        title: { display: true, text: "СИЛА ВОДЫ" },
       },
+      fill: true,
+    },
+    plugins: [],
+  };
+  const image = await chartJSNodeCanvas.renderToBuffer(configuration);
+
+  const directory = "temp-images"; // Specify the directory where you want to save the file
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory);
+  }
+  fs.writeFileSync(`${directory}/${filename}`, image);
+
+  return true;
+}
+
+async function getMinuteChart(filename, inputData = {}) {
+  const width = 800; //px
+  const height = 400; //px
+  const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
+  const chartJSNodeCanvas = new ChartJSNodeCanvas({
+    width,
+    height,
+    backgroundColour,
+  });
+  const data = {
+    labels: inputData.minutes,
+    datasets: [
+      {
+        type: "line",
+        label: "мм/ч",
+        data: inputData.precipIntensity,
+
+        backgroundColor: "rgb(134, 162, 214)",
+        tension: 0.1,
+        pointRadius: 0,
+      },
+      /* {
+        type: "line",
+        label: "% вероятность",
+        data: inputData.precipProbability60,
+        fill: false,
+        borderColor: "rgb(102, 123, 163)",
+        tension: 0.1,
+        pointRadius: 0,
+      }, */
+    ],
+  };
+
+  const configuration = {
+    data: data,
+    options: {
+      scales: { y: { suggestedMin: 0, suggestedMax: 1 } },
+      plugins: {
+        title: { display: true, text: "СИЛА ВОДЫ" },
+      },
+      fill: true,
     },
     plugins: [],
   };
@@ -706,4 +764,26 @@ async function getPirateForecast2hr(userID) {
   }
 
   return jisaoMinute;
+}
+
+async function getLocationDescription(latitude, longitude) {
+  const description = { locationID: null, locationName: null };
+  console.log(`getLocationDescription: hi`);
+  let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
+  let queryLocationName =
+    queryBase + `&q=${latitude},${longitude}&days=1&aqi=no&alerts=no`;
+  const locationResponse = await fetch(queryLocationName);
+  const locationObj = await locationResponse.json();
+  description.locationName = locationObj.location.name;
+
+  let query = `http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=${accuweatherKey}`;
+  query += `&q=${latitude},${longitude}`;
+  const response = await fetch(query);
+  const geopositionRes = await response.json();
+  description.locationID = geopositionRes.Key;
+  console.log(JSON.stringify(description));
+  console.log(
+    `getLocationDescription: description = ${JSON.stringify(description)}`
+  );
+  return description;
 }

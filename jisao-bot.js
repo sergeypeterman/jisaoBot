@@ -12,8 +12,10 @@ const {
   getJisaoDescription,
   getConditionRus,
   setBotObject,
-  getChart,
+  getMinuteChart,
   getPirateForecast2hr,
+  getLocationDescription,
+  getDayChart,
 } = require("./jisao-functions");
 
 require("dotenv").config();
@@ -22,9 +24,9 @@ const weatherKey = process.env.WEATHERAPI_KEY;
 const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
 const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 
-const chatId = process.env.CHAT_ID; //Jisao group id
+const homeChatId = process.env.CHAT_ID; //Jisao group id
 
-let accuDefaultLimits = {
+let defaultLimits = {
   limitMinute: { limitTotal: 25, limitRemain: 25 },
   limitCore: { limitTotal: 50, limitRemain: 50 },
   limitPirate: { limitTotal: 10000, limitRemain: 10000 },
@@ -36,14 +38,14 @@ if (typeof localStorage === "undefined" || localStorage === null) {
 
 const localLimits = localStorage.getItem("limits");
 if (localLimits) {
-  accuDefaultLimits = JSON.parse(localLimits, null, 2);
+  defaultLimits = JSON.parse(localLimits, null, 2);
 } else {
-  localStorage.setItem("limits", JSON.stringify(accuDefaultLimits, null, 2));
+  localStorage.setItem("limits", JSON.stringify(defaultLimits, null, 2));
 }
 
 let chatData;
 (async () => {
-  chatData = await createUser(chatId);
+  chatData = await createUser(homeChatId);
 })(); //all roads lead to Parede (default home location)
 
 const jisaoBot = new Telegraf(botKeys);
@@ -57,7 +59,8 @@ jisaoBot.start(async (ctx) => {
   • /weather2hr - прогноз в текущей локации на 2 часа
   • /weathertoday - прогноз на сегодня
   • /weathertomorrow - погода на завтра
-  • /updatelocation - задать свою локацию`;
+  • /updatelocation - задать свою локацию
+  • /updatehomelocation - задать домашнюю локацию`;
   await ctx.reply(replyStart);
 });
 
@@ -183,7 +186,7 @@ jisaoBot.command("weather2hr", async (ctx) => {
     console.log(`finally: ${data.precipIntensity}`);
 
     if (minuteReply.averagePrecip > -0.02) {
-      await getChart(`minute.png`, data);
+      await getMinuteChart(`minute.png`, data);
       const chartFilename = `temp-images/minute.png`;
 
       fs.access(chartFilename, fs.constants.F_OK, async (err) => {
@@ -211,6 +214,31 @@ jisaoBot.command("weather2hr", async (ctx) => {
 
 //--------------LOCATION-------------
 //-----------------------------------
+
+//set home location
+jisaoBot.command("updatehomelocation", async (ctx) => {
+  try {
+    let userID = ctx.from.id;
+    let chatID = ctx.chat.id;
+
+    //using chatData
+    chatData.locationUpdateRequested = true;
+
+    if (chatID > 0) {
+      //if we're in chat, not group
+      await ctx.reply(
+        "где живёшь ферзь (шли локацию)",
+        Markup.keyboard([Markup.button.locationRequest("туть")]).resize()
+      );
+    } else if (chatID < 0) {
+      //we're in group
+      await ctx.reply(`где живёшь ферзь (шли локацию)`);
+    }
+  } catch (error) {
+    console.log("error:", error);
+    ctx.reply(`ошибка ёба`);
+  }
+});
 
 //ask for user location
 jisaoBot.command("updatelocation", async (ctx) => {
@@ -265,56 +293,71 @@ jisaoBot.on(message("location"), async (ctx) => {
   try {
     const { latitude, longitude } = ctx.message.location;
 
-    const userID = ctx.from.id;
-    const checkUserExist = localStorage.getItem(`${userID}`);
-    let userData;
-
-    if (!checkUserExist) {
-      console.log(`user ${userID} doesn't exist`);
-      await ctx.reply(`Юзера №${userID} не знаемс, создаём`);
-      const newUser = await createUser(userID, {
-        latitude: latitude,
-        longitude: longitude,
-      });
-      console.log(
-        `on(message("location"))-> user ${newUser.userID} created, location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
+    //first check if updatehomelocation then if user asked to update
+    if (chatData.locationUpdateRequested) {
+      chatData.locationUpdateRequested = false;
+      chatData.location.latitude = latitude;
+      chatData.location.longitude = longitude;
+      console.log(`jisaoBot.on(message("location"): ${latitude}, ${longitude}`);
+      const { locationID, locationName } = await getLocationDescription(
+        latitude,
+        longitude
       );
-      await ctx.reply(`попався в ${newUser.locationName}`);
+      chatData.locationName = locationName;
+      chatData.locationID = locationID;
 
-      userData = newUser;
+      localStorage.setItem(
+        `${chatData.userID}`,
+        JSON.stringify(chatData, null, 2)
+      );
+      await ctx.reply(`гнездо теперь в ${chatData.locationName}`);
     } else {
-      userData = JSON.parse(checkUserExist);
-      if (userData.locationUpdateRequested) {
-        await ctx.reply(`user ${userData.userID} exists, updating location`);
-        userData.location.latitude = latitude;
-        userData.location.longitude = longitude;
-        userData.locationUpdateRequested = false;
+      const userID = ctx.from.id;
+      const checkUserExist = localStorage.getItem(`${userID}`);
+      let userData;
 
-        let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
-        let queryLocationName =
-          queryBase + `&q=${latitude},${longitude}&days=1&aqi=no&alerts=no`;
-        const locationResponse = await fetch(queryLocationName);
-        const locationObj = await locationResponse.json();
-        userData.locationName = locationObj.location.name;
-
-        let query = `http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=${accuweatherKey}`;
-        query += `&q=${latitude},${longitude}`;
-        const response = await fetch(query);
-        const geopositionRes = await response.json();
-        userData.locationID = geopositionRes.Key;
-
-        localStorage.setItem(`${userID}`, JSON.stringify(userData, null, 2));
-      } else {
-        await ctx.reply(
-          "я и так знаю где ты сидишь, если перелез, жми /updatelocation"
+      if (!checkUserExist) {
+        console.log(`user ${userID} doesn't exist`);
+        await ctx.reply(`Юзера №${userID} не знаемс, создаём`);
+        const newUser = await createUser(userID, {
+          latitude: latitude,
+          longitude: longitude,
+        });
+        console.log(
+          `on(message("location"))-> user ${newUser.userID} created, location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
         );
-      }
-    }
+        await ctx.reply(`попався в ${newUser.locationName}`);
 
-    await ctx.reply(
-      `ты нахуя туда залез\nв ${userData.locationName}`,
-      Markup.removeKeyboard()
-    );
+        userData = newUser;
+      } else {
+        userData = JSON.parse(checkUserExist);
+        if (userData.locationUpdateRequested) {
+          //await ctx.reply(`user ${userData.userID} exists, updating location`);
+          userData.location.latitude = latitude;
+          userData.location.longitude = longitude;
+          userData.locationUpdateRequested = false;
+
+          const { locationID, locationName } = await getLocationDescription(
+            latitude,
+            longitude
+          );
+          userData.locationName = locationName;
+          userData.locationID = locationID;
+
+          localStorage.setItem(`${userID}`, JSON.stringify(userData, null, 2));
+          await ctx.reply(`попався в ${userData.locationName}`);
+        } else {
+          await ctx.reply(
+            "я и так знаю где ты сидишь, если перелез, жми /updatelocation"
+          );
+        }
+      }
+
+      await ctx.reply(
+        `ты нахуя туда залез\nв ${userData.locationName}`,
+        Markup.removeKeyboard()
+      );
+    }
   } catch (err) {
     console.log(err);
     await ctx.reply("ошибка ёба");
@@ -322,19 +365,26 @@ jisaoBot.on(message("location"), async (ctx) => {
 });
 
 //reacts on text
-/* jisaoBot.on(message(`text`), async (ctx) => {
-  await ctx.reply(
-    `ctx.from.id: ${ctx.from.id}, chat:${ctx.chat.id},\nctx: ${JSON.stringify(
-      ctx.update,
-      null,
-      2
-    )}`
-  );
-  const jisMin = await getPirateForecast2hr(ctx.from.id);
-  ctx.reply(jisMin.summaryPrecipitation);
+jisaoBot.on(message(`text`), async (ctx) => {
+  if (ctx.text == "=") {
+    await ctx.reply(
+      `ctx.from.id: ${ctx.from.id}, chat:${ctx.chat.id},\nctx: ${JSON.stringify(
+        ctx.update,
+        null,
+        2
+      )}`
+    );
 
-  const chartFilename = `temp-images/chart.png`;
-  if (jisMin.isPrecipitation) {
+    let arr = new Array(120).fill(0);
+    const data = { minutes: [] };
+    data.precipIntensity = arr.reduce((acc, item, ind) => {
+      acc.push(Math.random());
+      data.minutes.push(ind);
+      return acc;
+    }, []);
+    await getDayChart("chart-day.png", data);
+    const chartFilename = `temp-images/chart-day.png`;
+
     fs.access(chartFilename, fs.constants.F_OK, async (err) => {
       if (err) {
         console.error(`${filePath} does not exist`);
@@ -343,8 +393,36 @@ jisaoBot.on(message("location"), async (ctx) => {
         await ctx.replyWithPhoto({ source: chartFilename });
       }
     });
-  }
-}); */
+  } /* else {
+    const vowels = [
+      "a",
+      "e",
+      "i",
+      "o",
+      "u",
+      "а",
+      "е",
+      "ё",
+      "и",
+      "о",
+      "у",
+      "ы",
+      "э",
+      "ю",
+      "я",
+    ];
+    const messageText = ctx.text.split("");
+    console.log(messageText);
+    let replyText = [...messageText];
+    let i = 0;
+    while (i < messageText.length && vowels.indexOf(messageText[i]) >= 0) {
+      i++;
+      replyText.shift();
+    }
+
+    await ctx.reply(`${replyText.join("")}, жми =`);
+  } */
+});
 
 //---------------CRON-----------------
 //------------------------------------
@@ -352,8 +430,8 @@ cron.schedule(
   "40 6 * * *", //6.40 every day
   async () => {
     console.log("Scheduling weather post...");
-    await jisaoBot.telegram.sendMessage(chatId, `доброго здоровичка`);
-    postToBotWeather("today", null, chatId);
+    await jisaoBot.telegram.sendMessage(homeChatId, `доброго здоровичка`);
+    await postToBotWeather("today", null, homeChatId);
   },
   { timezone: "Europe/Lisbon" }
 );
@@ -361,8 +439,8 @@ cron.schedule(
   "15 22 * * *", //22.15 every day
   async () => {
     console.log("Scheduling weather post...");
-    postToBotWeather("tomorrow", null, chatId);
-    await jisaoBot.telegram.sendMessage(chatId, `спокедулечки`);
+    await postToBotWeather("tomorrow", null, homeChatId);
+    await jisaoBot.telegram.sendMessage(homeChatId, `спокедулечки`);
   },
   { timezone: "Europe/Lisbon" }
 );
