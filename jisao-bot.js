@@ -367,19 +367,12 @@ jisaoBot.on(message("location"), async (ctx) => {
 //reacts on text
 jisaoBot.on(message(`text`), async (ctx) => {
   if (ctx.text == "=") {
-    await ctx.reply(
-      `ctx.from.id: ${ctx.from.id}, chat:${ctx.chat.id},\nctx: ${JSON.stringify(
-        ctx.update,
-        null,
-        2
-      )}`
-    );
-
-    let arr = new Array(120).fill(0);
-    const data = { minutes: [] };
+    let arr = new Array(24).fill(0);
+    const data = { minutes: [], uv: [], precipIntensity: [] };
     data.precipIntensity = arr.reduce((acc, item, ind) => {
       acc.push(Math.random());
       data.minutes.push(ind);
+      data.uv.push(Math.round(Math.random() * 12));
       return acc;
     }, []);
     await getDayChart("chart-day.png", data);
@@ -393,35 +386,7 @@ jisaoBot.on(message(`text`), async (ctx) => {
         await ctx.replyWithPhoto({ source: chartFilename });
       }
     });
-  } /* else {
-    const vowels = [
-      "a",
-      "e",
-      "i",
-      "o",
-      "u",
-      "а",
-      "е",
-      "ё",
-      "и",
-      "о",
-      "у",
-      "ы",
-      "э",
-      "ю",
-      "я",
-    ];
-    const messageText = ctx.text.split("");
-    console.log(messageText);
-    let replyText = [...messageText];
-    let i = 0;
-    while (i < messageText.length && vowels.indexOf(messageText[i]) >= 0) {
-      i++;
-      replyText.shift();
-    }
-
-    await ctx.reply(`${replyText.join("")}, жми =`);
-  } */
+  }
 });
 
 //---------------CRON-----------------

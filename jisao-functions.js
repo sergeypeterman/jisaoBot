@@ -1,7 +1,8 @@
 require("dotenv").config();
 const fs = require("fs");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
-const { title } = require("process");
+const sharp = require("sharp");
+
 module.exports = {
   createUser,
   create1hrForecastObject,
@@ -119,7 +120,9 @@ function create1hrForecastObject(
   windgust = 0,
   humid = 0,
   rain = 0,
-  rainChance = 0
+  rainChance = 0,
+  uv = 0,
+  num = 0
 ) {
   const forecast1hr = {
     temperature: temperature,
@@ -129,9 +132,37 @@ function create1hrForecastObject(
     humid: humid,
     rain: rain,
     rainChance: rainChance,
+    uv: uv,
+    num: num,
   };
 
   return forecast1hr;
+}
+
+function create24hrForecastObject(
+  temperature = [],
+  realfeel = [],
+  wind = [],
+  windgust = [],
+  humid = [],
+  rain = [],
+  rainChance = [],
+  uv = [],
+  num = []
+) {
+  const forecast24hr = {
+    temperature: temperature,
+    realfeel: realfeel,
+    wind: wind,
+    windgust: windgust,
+    humid: humid,
+    rain: rain,
+    rainChance: rainChance,
+    uv: uv,
+    num: num,
+  };
+
+  return forecast24hr;
 }
 
 //reads limits from local file, or returns a default object if there is none
@@ -441,6 +472,24 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     const forecast = weather.forecast.forecastday[dayToPost];
     const jisao = getJisaoDescription(forecast.day, conditionResponse);
 
+    //filling data for 24hr chart
+    const weather24hr = create24hrForecastObject();
+    for (let i = 0; i < forecast.hour.length; i++) {
+      let cur = forecast.hour[i];
+      weather24hr.temperature.push(cur.temp_c);
+      weather24hr.realfeel.push(cur.feelslike_c);
+      weather24hr.wind.push(Math.round((cur.wind_kph * 10) / 3.6) / 10);
+      weather24hr.windgust.push(Math.round((cur.gust_kph * 10) / 3.6) / 10);
+      weather24hr.humid.push(cur.humidity);
+      weather24hr.rain.push(cur.precip_mm);
+      weather24hr.rainChance.push(cur.chance_of_rain);
+      weather24hr.uv.push(cur.uv);
+      weather24hr.num.push((i + 1) % 24);
+    }
+    const chartFilename = "chart-day.png";
+    await getDayChart(chartFilename, weather24hr);
+    //console.log(JSON.stringify(weather24hr, null, 2));
+
     let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} ${jisao.whole}`;
     stringPost += `, ${jisao.condition}\n`;
     stringPost += `\n☀️ ${jisao.day},\n🌙 ${jisao.night},\n\n`;
@@ -448,15 +497,36 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     stringPost += `😎 ${jisao.uv}`;
     stringPost += `\n\nсейчас ${weather.current.temp_c}°C${currentCondition}`;
 
-    if (ctx === null) {
-      await jisaoBot.telegram.sendMessage(targetchat, stringPost, {
-        parse_mode: "Markdown",
-      });
-    } else if (ctx) {
-      await ctx.reply(stringPost, { parse_mode: "Markdown" });
-    } else {
-      throw new Error("error, context ctx doesn't exist");
-    }
+    fs.access(
+      `temp-images/${chartFilename}`,
+      fs.constants.F_OK,
+      async (err) => {
+        if (err) {
+          console.error(`temp-images/${chartFilename} does not exist`);
+          ctx.reply(`график тогось`);
+        } else {
+          if (ctx === null) {
+            await jisaoBot.telegram.sendPhoto(
+              targetchat,
+              {
+                source: `temp-images/${chartFilename}`,
+              },
+              {
+                caption: stringPost,
+                parse_mode: "Markdown",
+              }
+            );
+          } else if (ctx) {
+            await ctx.replyWithPhoto(
+              { source: `temp-images/${chartFilename}` },
+              { caption: stringPost, parse_mode: "Markdown" }
+            );
+          } else {
+            throw new Error("error, context ctx doesn't exist");
+          }
+        }
+      }
+    );
   } catch (err) {
     console.log("error:", err);
     jisaoBot.telegram.sendMessage(chatIdBot, err);
@@ -585,56 +655,257 @@ function getConditionRus(day, codeList) {
 }
 
 async function getDayChart(filename, inputData = {}) {
-  const width = 800; //px
-  const height = 400; //px
+  const width = 900; //px
+  const height = 300; //px
   const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
-  const chartJSNodeCanvas = new ChartJSNodeCanvas({
+  const canvasAir = new ChartJSNodeCanvas({
     width,
     height,
     backgroundColour,
   });
-  const data = {
-    labels: inputData.minutes,
+  const canvasSun = new ChartJSNodeCanvas({
+    width,
+    height,
+    backgroundColour,
+  });
+  const canvasWater = new ChartJSNodeCanvas({
+    width,
+    height,
+    backgroundColour,
+  });
+
+  const colors = {
+    uv: "rgb(228, 102, 8)",
+    precip: "rgb(134, 162, 214)",
+    darkPrecip: "rgb(102, 123, 163)",
+    temperatureFill: "#ffc8bf40",
+    temperature: "#b31800",
+    darkPrecipChance: "rgba(102, 123, 163, 0.5)",
+    humidity: "#4e548f",
+  };
+  const dataSun = {
+    labels: inputData.num,
     datasets: [
       {
         type: "line",
-        label: "мм/ч",
-        data: inputData.precipIntensity,
-
-        backgroundColor: "rgb(134, 162, 214)",
-        tension: 0.1,
-        pointRadius: 0,
-      },
-      /* {
-        type: "line",
-        label: "% вероятность",
-        data: inputData.precipProbability60,
+        label: "",
+        data: inputData.uv,
         fill: false,
-        borderColor: "rgb(102, 123, 163)",
+        borderColor: colors.uv,
         tension: 0.1,
         pointRadius: 0,
-      }, */
+        yAxisID: "yr",
+      },
+      {
+        type: "line",
+        label: "",
+        data: inputData.temperature,
+        borderColor: colors.temperature,
+        backgroundColor: colors.temperatureFill,
+        tension: 0.1,
+        pointRadius: 0,
+        yAxisID: "yl",
+      },
+      {
+        type: "line",
+        label: "",
+        data: inputData.realfeel,
+        borderWidth: 1,
+        borderColor: colors.temperature,
+        tension: 0.1,
+        pointRadius: 0,
+        yAxisID: "yl",
+      },
     ],
   };
 
-  const configuration = {
-    data: data,
+  const configurationSun = {
+    data: dataSun,
     options: {
-      scales: { y: { suggestedMin: 0, suggestedMax: 1 } },
+      scales: {
+        yr: {
+          title: {
+            display: true,
+            text: "UV",
+            color: colors.uv,
+          },
+          suggestedMin: 0,
+          suggestedMax: 12,
+          position: "right",
+        },
+        yl: {
+          title: {
+            display: true,
+            text: "Температура",
+            color: colors.temperature,
+          },
+          suggestedMin: 0,
+          suggestedMax: 30,
+          position: "left",
+        },
+      },
       plugins: {
-        title: { display: true, text: "СИЛА ВОДЫ" },
+        title: { display: true, text: "СИЛА СОЛНЦА" },
+        legend: { display: false },
       },
       fill: true,
     },
     plugins: [],
   };
-  const image = await chartJSNodeCanvas.renderToBuffer(configuration);
+
+  const dataWater = {
+    labels: inputData.num,
+    datasets: [
+      {
+        type: "line",
+        label: "Влажность",
+        data: inputData.humid,
+        fill: false,
+        borderWidth: 3,
+        borderColor: colors.humidity,
+        tension: 0.4,
+        pointRadius: 0,
+        yAxisID: "yr",
+      },
+      {
+        type: "line",
+        label: "Вероятность",
+        data: inputData.rainChance,
+        fill: false,
+        borderWidth: 1,
+        borderColor: colors.darkPrecipChance,
+        tension: 0.4,
+        pointRadius: 0,
+        yAxisID: "yr",
+      },
+      {
+        type: "line",
+        label: "Количество",
+        data: inputData.rain,
+        backgroundColor: colors.precip,
+        tension: 0.4,
+        pointRadius: 0,
+        yAxisID: "yl",
+      },
+    ],
+  };
+
+  const configurationWater = {
+    data: dataWater,
+    options: {
+      scales: {
+        yr: {
+          title: {
+            display: true,
+            text: "%",
+            color: colors.darkPrecip,
+          },
+          suggestedMin: 0,
+          suggestedMax: 100,
+          position: "right",
+        },
+        yl: {
+          title: {
+            display: true,
+            text: "Осадки, мм/час",
+            color: colors.precip,
+          },
+          suggestedMin: 0,
+          suggestedMax: 1,
+          position: "left",
+        },
+      },
+      plugins: {
+        title: { display: true, text: "СИЛА ВОДЫ" },
+        legend: { display: true, labels: { boxHeight: 3 } },
+      },
+      fill: true,
+    },
+    plugins: [],
+  };
+
+  /*   const dataAir = {
+    labels: inputData.num,
+    datasets: [
+      {
+        type: "line",
+        label: "",
+        data: inputData.humid,
+        fill: false,
+        borderColor: colors.darkPrecip,
+        tension: 0.1,
+        pointRadius: 0,
+        yAxisID: "yr",
+      },
+      {
+        type: "line",
+        label: "",
+        data: inputData.realfeel,
+        borderColor: colors.temperature,
+        backgroundColor: colors.temperatureFill,
+        tension: 0.1,
+        pointRadius: 0,
+        yAxisID: "yl",
+      },
+    ],
+  };
+
+  const configurationAir = {
+    data: dataAir,
+    options: {
+      scales: {
+        yr: {
+          title: {
+            display: true,
+            text: "Отн. влажность, %",
+            color: colors.darkPrecip,
+          },
+          suggestedMin: 0,
+          suggestedMax: 100,
+          position: "right",
+        },
+        yl: {
+          title: {
+            display: true,
+            text: "Ощущается как, °С",
+            color: colors.temperature,
+          },
+          suggestedMin: 0,
+          suggestedMax: 30,
+          position: "left",
+        },
+      },
+      plugins: {
+        title: { display: true, text: "СИЛА ВОЗДУХА" },
+        legend: { display: false },
+      },
+      fill: true,
+    },
+    plugins: [],
+  }; */
+  const sunImage = await canvasSun.renderToBuffer(configurationSun);
+  const waterImage = await canvasWater.renderToBuffer(configurationWater);
 
   const directory = "temp-images"; // Specify the directory where you want to save the file
   if (!fs.existsSync(directory)) {
     fs.mkdirSync(directory);
   }
-  fs.writeFileSync(`${directory}/${filename}`, image);
+  //fs.writeFileSync(`${directory}/0${filename}`, image);
+
+  const combinedImage = sharp({
+    create: {
+      width: 900,
+      height: 600,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 4 }, // Transparent background
+    },
+  });
+
+  await combinedImage.composite([
+    { input: sunImage, top: 0, left: 0 },
+    { input: waterImage, top: 300, left: 0 },
+  ]);
+  await combinedImage.png().toFile(`${directory}/${filename}`);
 
   return true;
 }
