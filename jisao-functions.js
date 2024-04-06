@@ -2,6 +2,7 @@ require("dotenv").config();
 const fs = require("fs");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 const sharp = require("sharp");
+const { layouts } = require("chart.js");
 
 module.exports = {
   createUser,
@@ -463,7 +464,7 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     const currentCondition =
       getCondition === undefined ? null : `, ${getCondition}`;
 
-    console.log(query2days);
+    //console.log(query2days);
 
     let dayToPost = day === "today" ? 0 : 1;
     const theDayRus =
@@ -657,12 +658,7 @@ async function getDayChart(filename, inputData = {}) {
   const height = 300; //px
   const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
 
-  const canvasSun = new ChartJSNodeCanvas({
-    width,
-    height,
-    backgroundColour,
-  });
-  const canvasWater = new ChartJSNodeCanvas({
+  const canvas300900 = new ChartJSNodeCanvas({
     width,
     height,
     backgroundColour,
@@ -670,7 +666,7 @@ async function getDayChart(filename, inputData = {}) {
 
   const colors = {
     uv: "rgb(228, 102, 8)",
-    uvBack:"#FF450030",
+    uvBack: "#FF450030",
     precip: "rgb(134, 162, 214)",
     darkPrecip: "rgb(102, 123, 163)",
     temperatureFill: "#ff918040",
@@ -708,6 +704,7 @@ async function getDayChart(filename, inputData = {}) {
         data: inputData.realfeel,
         borderWidth: 1,
         borderColor: colors.temperature,
+        fill: false,
         tension: 0.1,
         pointRadius: 0,
         yAxisID: "yl",
@@ -724,6 +721,7 @@ async function getDayChart(filename, inputData = {}) {
             display: true,
             text: "UV",
             color: colors.uv,
+            padding: 10,
           },
           suggestedMin: 0,
           suggestedMax: 12,
@@ -820,8 +818,8 @@ async function getDayChart(filename, inputData = {}) {
     plugins: [],
   };
 
-  const sunImage = await canvasSun.renderToBuffer(configurationSun);
-  const waterImage = await canvasWater.renderToBuffer(configurationWater);
+  const sunImage = await canvas300900.renderToBuffer(configurationSun);
+  const waterImage = await canvas300900.renderToBuffer(configurationWater);
 
   const directory = "temp-images"; // Specify the directory where you want to save the file
   if (!fs.existsSync(directory)) {
@@ -839,7 +837,7 @@ async function getDayChart(filename, inputData = {}) {
   });
 
   await combinedImage.composite([
-    { input: sunImage, top: 0, left: 0 },
+    { input: sunImage, top: 0, left: 4 },
     { input: waterImage, top: 300, left: 0 },
   ]);
   await combinedImage.png().toFile(`${directory}/${filename}`);
