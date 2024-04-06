@@ -676,9 +676,10 @@ async function getDayChart(filename, inputData = {}) {
 
   const colors = {
     uv: "rgb(228, 102, 8)",
+    uvBack:"#FF450030",
     precip: "rgb(134, 162, 214)",
     darkPrecip: "rgb(102, 123, 163)",
-    temperatureFill: "#ffc8bf40",
+    temperatureFill: "#ff918040",
     temperature: "#b31800",
     darkPrecipChance: "rgba(102, 123, 163, 0.5)",
     humidity: "#4e548f",
@@ -690,8 +691,9 @@ async function getDayChart(filename, inputData = {}) {
         type: "line",
         label: "",
         data: inputData.uv,
-        fill: false,
+        //fill: false,
         borderColor: colors.uv,
+        backgroundColor: colors.uvBack,
         tension: 0.1,
         pointRadius: 0,
         yAxisID: "yr",
