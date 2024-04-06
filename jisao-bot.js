@@ -122,6 +122,13 @@ jisaoBot.command("weather2hr", async (ctx) => {
       throw new Error(minuteReply.error.description);
     }
 
+    const { precipIntensity, precipType, averagePrecip } =
+      await getPirateForecast2hr(userID);
+
+    minuteReply.precipIntensity = precipIntensity;
+    minuteReply.precipType = precipType;
+    minuteReply.averagePrecip = averagePrecip;
+
     let userData;
     if (!localStorage.getItem(`${userID}`)) {
       console.log(`weather2hr: user ${userID} doesn't exist`);
@@ -135,7 +142,62 @@ jisaoBot.command("weather2hr", async (ctx) => {
 
     let forecast2hr = getMinuteDescription(userData, minuteReply);
 
-    await ctx.reply(forecast2hr);
+    //await ctx.reply(forecast2hr);
+
+    //forging data
+    //get 120 min from accuweather for rain(true\false), and extend 60 min of pirate(mm\hr) with average
+    let data = { precipIntensity: [], minutes: [] };
+    data.precipIntensity = minuteReply.precipIntensity;
+    data.minutes = new Array(120).fill(0).reduce((acc, item, ind) => {
+      acc.push(ind);
+      if (data.precipIntensity[ind] === undefined) {
+        data.precipIntensity.push(minuteReply.forecast12hr[1].rain);
+      }
+      return acc;
+    }, []);
+
+    console.log(`accuweather: ${minuteReply.precipAccuArr}`);
+    console.log(`pirate precipIntensity: ${data.precipIntensity}`);
+    console.log(
+      `forecast12hr[0]: ${JSON.stringify(minuteReply.forecast12hr[0])}`
+    );
+    console.log(
+      `forecast12hr[1]: ${JSON.stringify(minuteReply.forecast12hr[1])}`
+    );
+    //filtering out pirate weather minute values, based on accuweather 0\1\..
+    for (let i = 0; i < data.precipIntensity.length; i++) {
+      if (minuteReply.precipAccuArr[i]) {
+        if (data.precipIntensity[i] === 0) {
+          let hour = Math.floor(i / 60);
+          console.log(`hour: ${hour}`);
+          if (!minuteReply.forecast12hr[hour].rain) {
+            data.precipIntensity[i] = minuteReply.averagePrecip;
+          } else {
+            data.precipIntensity[i] = minuteReply.forecast12hr[hour].rain;
+          }
+        }
+      } else {
+        data.precipIntensity[i] = 0;
+      }
+    }
+    console.log(`finally: ${data.precipIntensity}`);
+
+    if (minuteReply.averagePrecip > -0.02) {
+      await getChart(`minute.png`, data);
+      const chartFilename = `temp-images/minute.png`;
+
+      fs.access(chartFilename, fs.constants.F_OK, async (err) => {
+        if (err) {
+          console.error(`${filePath} does not exist`);
+          ctx.reply(`график тогось`);
+        } else {
+          await ctx.replyWithPhoto(
+            { source: chartFilename },
+            { caption: forecast2hr }
+          );
+        }
+      });
+    }
     /* //post limits as well
     await ctx.reply(
       `||limit: ${minuteReply.limitMinute.limitRemain}/${minuteReply.limitMinute.limitTotal}||`,
@@ -260,7 +322,7 @@ jisaoBot.on(message("location"), async (ctx) => {
 });
 
 //reacts on text
-jisaoBot.on(message(`text`), async (ctx) => {
+/* jisaoBot.on(message(`text`), async (ctx) => {
   await ctx.reply(
     `ctx.from.id: ${ctx.from.id}, chat:${ctx.chat.id},\nctx: ${JSON.stringify(
       ctx.update,
@@ -272,15 +334,17 @@ jisaoBot.on(message(`text`), async (ctx) => {
   ctx.reply(jisMin.summaryPrecipitation);
 
   const chartFilename = `temp-images/chart.png`;
-  fs.access(chartFilename, fs.constants.F_OK, async (err) => {
-    if (err) {
-      console.error(`${filePath} does not exist`);
-      ctx.reply(`график тогось`);
-    } else {
-      await ctx.replyWithPhoto({ source: chartFilename });
-    }
-  });
-});
+  if (jisMin.isPrecipitation) {
+    fs.access(chartFilename, fs.constants.F_OK, async (err) => {
+      if (err) {
+        console.error(`${filePath} does not exist`);
+        ctx.reply(`график тогось`);
+      } else {
+        await ctx.replyWithPhoto({ source: chartFilename });
+      }
+    });
+  }
+}); */
 
 //---------------CRON-----------------
 //------------------------------------

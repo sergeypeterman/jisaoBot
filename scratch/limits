@@ -1,14 +1,14 @@
 {
   "limitMinute": {
     "limitTotal": "25",
-    "limitRemain": "23"
+    "limitRemain": "7"
   },
   "limitCore": {
     "limitTotal": "50",
-    "limitRemain": "48"
+    "limitRemain": "31"
   },
   "limitPirate": {
     "limitTotal": "10000",
-    "limitRemain": "9952"
+    "limitRemain": "9926"
   }
 }

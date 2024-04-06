@@ -31,6 +31,31 @@ class APILimits {
   }
 }
 
+//datatype for minute forecasts
+class Jisao {
+  constructor(
+    summaryPrecipitation = "",
+    isPrecipitation = true,
+    minuteSummary = [],
+    precipAccuArr = [],
+    forecast12hr = [],
+    precipIntensity = [],
+    precipType = [],
+    averagePrecip = 0,
+    error = { status: false, description: "" }
+  ) {
+    this.summaryPrecipitation = summaryPrecipitation;
+    this.isPrecipitation = isPrecipitation;
+    this.minuteSummary = minuteSummary;
+    this.precipAccuArr = precipAccuArr;
+    this.forecast12hr = forecast12hr;
+    this.precipIntensity = precipIntensity;
+    this.precipType = precipType;
+    this.averagePrecip = averagePrecip;
+    this.error = error;
+  }
+}
+
 let jisaoBot;
 function setBotObject(botObject) {
   jisaoBot = botObject;
@@ -107,16 +132,6 @@ function create1hrForecastObject(
   return forecast1hr;
 }
 
-//datatype for minute forecasts
-function createMinuteObj() {
-  const jisaoMinute = {
-    summaryPrecipitation: "",
-    minuteSummary: [],
-    forecast12hr: [],
-    error: { status: false, description: "" },
-  };
-}
-
 //reads limits from local file, or returns a default object if there is none
 function getLimits() {
   const limits = new APILimits();
@@ -189,7 +204,7 @@ function getMinuteDescription(userData, minuteReply) {
     const hour2 = minuteReply.forecast12hr[1];
 
     let precipString = "подробностей не дали";
-    if (minuteReply.minuteSummary.length > 0) {
+    /* if (minuteReply.minuteSummary.length > 0) {
       let precipArr = Array(12).fill(minuteReply.minuteSummary[0].type);
 
       //filling 10-minutes blocks with precipitation types
@@ -202,11 +217,14 @@ function getMinuteDescription(userData, minuteReply) {
         }
       }
       precipString = precipArr.join("");
-    }
+    } */
 
+    precipString = minuteReply.precipAccuArr.join("");
+
+    //emoji line ${precipString}\n is replaced with charts
     forecast2hr = `В ${
       userData.locationName
-    } ${minuteReply.summaryPrecipitation.toLowerCase()}\n${precipString}\n\n`;
+    } ${minuteReply.summaryPrecipitation.toLowerCase()}\n\n`;
     forecast2hr += `В этом часу\n🌡️ ${hour1.temperature}°C, ощущается как ${hour1.realfeel}°C\n`;
     forecast2hr += `💨 ветер ${hour1.wind}м/с c порывами до ${hour1.windgust}м/с`;
     forecast2hr +=
@@ -309,14 +327,29 @@ async function getForecast2hr(userID) {
 
       if (forecastMinute.Summary.Phrase) {
         jisaoMinute.summaryPrecipitation = forecastMinute.Summary.Phrase;
+        //getting line of emojis 🌂🌂🌂💧💧💧💧🌂🌂🌂🌂🌂.
+        //It's turned off by now in getMinuteDescription and replaced with charts and digital types
         if (forecastMinute.Summaries.length > 0) {
           for (let sum of forecastMinute.Summaries) {
-            const type = getMinuteEmoji(sum.TypeId);
+            //const type = getMinuteEmoji(sum.TypeId); <-------
+            const type = sum.TypeId === null ? 0 : sum.TypeId;
             jisaoMinute.minuteSummary.push({
               startMinute: sum.StartMinute,
               type: type,
             });
           }
+        }
+        if (jisaoMinute.minuteSummary.length > 0) {
+          let precipArr = Array(120).fill(jisaoMinute.minuteSummary[0].type);
+
+          //filling 10-minutes blocks with precipitation types
+          for (let i = 1; i < jisaoMinute.minuteSummary.length; i++) {
+            let minutesNext = jisaoMinute.minuteSummary[i].startMinute;
+            for (let j = minutesNext; j < precipArr.length; j++) {
+              precipArr[j] = jisaoMinute.minuteSummary[i].type;
+            }
+          }
+          jisaoMinute.precipAccuArr = precipArr;
         }
       } else {
         jisaoMinute.error.status = true;
@@ -561,7 +594,7 @@ async function getChart(filename, inputData = {}) {
       {
         type: "line",
         label: "мм/ч",
-        data: inputData.precipIntensity60,
+        data: inputData.precipIntensity,
         fill: {
           target: "origin",
           above: "rgb(134, 162, 214)", // Area will be red above the origin
@@ -570,7 +603,7 @@ async function getChart(filename, inputData = {}) {
         tension: 0.1,
         pointRadius: 0,
       },
-      {
+      /* {
         type: "line",
         label: "% вероятность",
         data: inputData.precipProbability60,
@@ -578,7 +611,7 @@ async function getChart(filename, inputData = {}) {
         borderColor: "rgb(102, 123, 163)",
         tension: 0.1,
         pointRadius: 0,
-      },
+      }, */
     ],
   };
 
@@ -608,15 +641,11 @@ async function getChart(filename, inputData = {}) {
 async function getPirateForecast2hr(userID) {
   const userData = getUser(userID);
 
-  const jisaoMinute = {
-    summaryPrecipitation: "чот пошло не так",
-    minuteSummary: [],
-    forecast12hr: [],
-    error: { status: false, description: "" },
-  };
+  const jisaoMinute = new Jisao();
 
   if (!userData) {
-    jisaoMinute.summaryPrecipitation = `user ${userID} doesn't exist`;
+    jisaoMinute.error.description = `user ${userID} doesn't exist`;
+    jisaoMinute.error.status = true;
     return jisaoMinute;
   }
 
@@ -631,9 +660,11 @@ async function getPirateForecast2hr(userID) {
   let data = { precipIntensity60: [], precipProbability60: [], minutes: [] };
   try {
     if (isLimitPirateReached) {
-      jisaoMinute.summaryPrecipitation = `лимит пиратских запросов тогось, будем плотить?`;
-    } else { //hardcoded location for now
-      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/48.137154,11.576124?units=si&exclude=[daily,alerts]`;
+      jisaoMinute.error.description = `лимит пиратских запросов тогось, будем плотить?`;
+      jisaoMinute.error.status = true;
+    } else {
+      //hardcoded location for now
+      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/${userData.location.latitude},${userData.location.longitude}?units=si&exclude=[daily,alerts]`;
       const res = await fetch(pirateQuery);
       const response = await res.json();
 
@@ -645,18 +676,30 @@ async function getPirateForecast2hr(userID) {
 
       setLimits(limits);
 
-      jisaoMinute.summaryPrecipitation = response.minutely.summary;
+      //jisaoMinute.summaryPrecipitation = response.minutely.summary;
       data = response.minutely.data.reduce(
         (acc, item, ind) => {
           acc.precipIntensity60.push(item.precipIntensity);
           acc.precipProbability60.push(item.precipProbability);
+          acc.precipType60.push(item.precipType); //rain, snow or sleet; otherwise none
           acc.minutes.push(ind);
           return acc;
         },
-        { precipIntensity60: [], precipProbability60: [], minutes: [] }
+        {
+          precipIntensity60: [],
+          precipProbability60: [],
+          minutes: [],
+          precipType60: [],
+        }
       );
-      console.log(JSON.stringify(data));
-      await getChart(`chart.png`, data);
+      //console.log(JSON.stringify(data));
+
+      jisaoMinute.precipIntensity = data.precipIntensity60;
+      jisaoMinute.precipType = data.precipType60;
+
+      jisaoMinute.averagePrecip =
+        data.precipIntensity60.reduce((acc, item) => (acc += item), 0) /
+        data.precipIntensity60.length;
     }
   } catch (err) {
     console.log(err);
