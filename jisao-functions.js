@@ -36,7 +36,7 @@ class APILimits {
 }
 
 //datatype for minute forecasts
-class Jisao {
+class JisaoMinute {
   constructor(
     summaryPrecipitation = "",
     isPrecipitation = true,
@@ -446,32 +446,86 @@ async function getForecast2hr(userID) {
 
 async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
   try {
+    //change hardcoded location
     let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
     let query2days = queryBase + `&q=Parede&days=2&aqi=no&alerts=yes`;
 
     const weatherResponse = await fetch(query2days);
-
-    /* let test = weatherResponse.headers.get(`date`);
-    console.log(weatherResponse.headers)
-    console.log(`test headers ${test}`); */
-    const weather = await weatherResponse.json();
     const condResponse = await fetch(
       "https://www.weatherapi.com/docs/conditions.json"
     );
+    const weather = await weatherResponse.json();
     const conditionResponse = await condResponse.json();
 
     const getCondition = getConditionRus(weather.current, conditionResponse);
     const currentCondition =
       getCondition === undefined ? null : `, ${getCondition}`;
 
-    //console.log(query2days);
-
     let dayToPost = day === "today" ? 0 : 1;
     const theDayRus =
       day === "today" ? "сегодня ожидаются" : "завтра обещаются";
+    const theDateTdoay = new Date();
+    const theDate = new Date(
+      theDateTdoay.getFullYear(),
+      theDateTdoay.getMonth(),
+      theDateTdoay.getDate(),
+      0,
+      0,
+      0,
+      0
+    );
+    day !== "today" && theDate.setDate(theDate.getDate() + 1);
+    const unixTime = Math.floor(theDate.getTime() / 1000);
+    console.log(unixTime);
 
     const forecast = weather.forecast.forecastday[dayToPost];
     const jisao = getJisaoDescription(forecast.day, conditionResponse);
+
+    const limits = getLimits();
+
+    const isLimitPirateReached =
+      limits.limitPirate.limitRemain == 0 ? true : false;
+
+    //units = si, query gets 24hr of data. For 168hrs ?extend=true
+
+    //getting pirate weather. For today use 0h00, for tomorrow
+
+    let pirate24hr = { uv: [] };
+
+    if (isLimitPirateReached) {
+      //jisaoMinute.error.description = `лимит пиратских запросов тогось, будем плотить?`;
+      //jisaoMinute.error.status = true;
+      throw new Error("лимит пиратских запросов тогось, будем плотить?");
+    } else {
+      let timeQuery = day === "today" ? `,${unixTime}` : "";
+
+      //change hardcoded location
+      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/38.686116,-9.349137${timeQuery}?units=si&exclude=[daily,alerts]`;
+      console.log(`postToBotWeather: ${pirateQuery}`);
+      const pirateRes = await fetch(pirateQuery);
+      const pirateResponse = await pirateRes.json();
+
+      limits.limitPirate.limitTotal = pirateRes.headers.get("RateLimit-Limit");
+      limits.limitPirate.limitRemain = pirateRes.headers.get(
+        "RateLimit-Remaining"
+      );
+      console.log(
+        `getPirateForecast2hr: PirateWeather limit: ${limits.limitPirate.limitRemain}/${limits.limitPirate.limitTotal}`
+      );
+
+      setLimits(limits);
+
+      for (let i = 0; i < pirateResponse.hourly.data.length; i++) {
+        //let firstHourIndex = i;
+        if (pirateResponse.hourly.data[i].time == unixTime) {
+          for (let j = i; j < 24; j++) {
+            pirate24hr.uv.push(pirateResponse.hourly.data[j].uvIndex);
+          }
+          console.log(pirate24hr.uv);
+          break;
+        }
+      }
+    }
 
     //filling data for 24hr chart
     const weather24hr = create24hrForecastObject();
@@ -484,7 +538,8 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
       weather24hr.humid.push(cur.humidity);
       weather24hr.rain.push(cur.precip_mm);
       weather24hr.rainChance.push(cur.chance_of_rain);
-      weather24hr.uv.push(cur.uv);
+      //weather24hr.uv.push(cur.uv);
+      weather24hr.uv.push(pirate24hr.uv[i]);
       weather24hr.num.push((i + 1) % 24);
     }
     const chartFilename = "chart-day.png";
@@ -905,7 +960,7 @@ async function getMinuteChart(filename, inputData = {}) {
 async function getPirateForecast2hr(userID) {
   const userData = getUser(userID);
 
-  const jisaoMinute = new Jisao();
+  const jisaoMinute = new JisaoMinute();
 
   if (!userData) {
     jisaoMinute.error.description = `user ${userID} doesn't exist`;
@@ -919,8 +974,6 @@ async function getPirateForecast2hr(userID) {
     limits.limitPirate.limitRemain == 0 ? true : false;
 
   //units = si, query gets 24hr of data. For 168hrs ?extend=true
-  //unsing munich for tests 48.137154,11.576124
-  //${userData.location.latitude},${userData.location.longitude}
   let data = { precipIntensity60: [], precipProbability60: [], minutes: [] };
   try {
     if (isLimitPirateReached) {
