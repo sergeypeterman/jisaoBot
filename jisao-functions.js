@@ -25,6 +25,7 @@ const weatherKey = process.env.WEATHERAPI_KEY;
 const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
 const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 const pirateWeatherKey = process.env.P_WEATHER_KEY;
+const homeChatId = process.env.CHAT_ID; //Jisao group id
 
 //default api limits
 class APILimits {
@@ -444,11 +445,15 @@ async function getForecast2hr(userID) {
   return jisaoMinute;
 }
 
+// function is being used for daily forecasts at home only (yeah, not the best name)
 async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
   try {
-    //change hardcoded location
+    //getting home data
+    let homeUser = getUser(homeChatId);
+
+    //changed hardcoded location
     let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
-    let query2days = queryBase + `&q=Parede&days=2&aqi=no&alerts=yes`;
+    let query2days = queryBase + `&q=${homeUser.locationName}&days=2&aqi=no&alerts=yes`;
 
     const weatherResponse = await fetch(query2days);
     const condResponse = await fetch(
@@ -499,8 +504,8 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     } else {
       let timeQuery = day === "today" ? `,${unixTime}` : "";
 
-      //change hardcoded location
-      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/38.686116,-9.349137${timeQuery}?units=si&exclude=[daily,alerts]`;
+      //changed hardcoded location
+      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/${homeUser.location.latitude}${homeUser.location.longitude}${timeQuery}?units=si&exclude=[daily,alerts]`;
       console.log(`postToBotWeather: ${pirateQuery}`);
       const pirateRes = await fetch(pirateQuery);
       const pirateResponse = await pirateRes.json();
