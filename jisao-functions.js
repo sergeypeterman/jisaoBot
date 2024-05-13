@@ -505,7 +505,7 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
       let timeQuery = day === "today" ? `,${unixTime}` : "";
 
       //changed hardcoded location
-      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/${homeUser.location.latitude}${homeUser.location.longitude}${timeQuery}?units=si&exclude=[daily,alerts]`;
+      const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/${homeUser.location.latitude},${homeUser.location.longitude}${timeQuery}?units=si&exclude=[daily,alerts]`;
       console.log(`postToBotWeather: ${pirateQuery}`);
       const pirateRes = await fetch(pirateQuery);
       const pirateResponse = await pirateRes.json();
