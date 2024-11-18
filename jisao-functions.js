@@ -453,7 +453,8 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
 
     //changed hardcoded location
     let queryBase = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}`;
-    let query2days = queryBase + `&q=${homeUser.locationName}&days=2&aqi=no&alerts=yes`;
+    let query2days =
+      queryBase + `&q=${homeUser.locationName}&days=2&aqi=no&alerts=yes`;
 
     const weatherResponse = await fetch(query2days);
     const condResponse = await fetch(
@@ -558,6 +559,8 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     stringPost += `😎 ${jisao.uv}`;
     stringPost += `\n\nсейчас ${weather.current.temp_c}°C${currentCondition}`;
 
+    stringPost += await getMIDPassports();
+
     fs.access(
       `temp-images/${chartFilename}`,
       fs.constants.F_OK,
@@ -592,6 +595,32 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     console.log("error:", err);
     jisaoBot.telegram.sendMessage(chatIdBot, err);
   }
+}
+
+const numsP = [
+  { name: "Гусь", id: "2000351012024091600011972", status: "" },
+  { name: "Татарин", id: "2000351012024100700012084", status: "" },
+];
+async function getMIDPassports() {
+  const newNums = JSON.parse(JSON.stringify(numsP));
+
+  let mid = `\n`;
+  await Promise.all(
+    newNums.map(async (item) => {
+      const queryMID = `https://info.midpass.ru/api/request/${item.id}`;
+
+      const res = await fetch(queryMID);
+      const response = await res.json();
+
+      item.status += `\n${item.name}, `;
+      item.status += response.passportStatus.name;
+      item.status += `\nГотовность: ${response.internalStatus.percent}%, ${response.internalStatus.name}`;
+
+      mid += item.status;
+    })
+  );
+  console.log(mid);
+  return mid;
 }
 
 //unversal function, maybe it's excessive
