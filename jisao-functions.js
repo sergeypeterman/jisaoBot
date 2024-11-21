@@ -559,7 +559,7 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     stringPost += `😎 ${jisao.uv}`;
     stringPost += `\n\nсейчас ${weather.current.temp_c}°C${currentCondition}`;
 
-    //stringPost += await getMIDPassports();
+    stringPost += await getMIDPassports();
 
     fs.access(
       `temp-images/${chartFilename}`,
