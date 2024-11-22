@@ -599,7 +599,7 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
 
 const numsP = [
   { name: "Гусь", id: "2000351012024091600011972", status: "" },
-  { name: "Татарин", id: "2000351012024100700012084", status: "" },
+  { name: "Царь", id: "2000351012024100700012084", status: "" },
 ];
 async function getMIDPassports() {
   const newNums = JSON.parse(JSON.stringify(numsP));
