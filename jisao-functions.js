@@ -99,19 +99,27 @@ async function createUser(
     query += `&q=${newUser.location.latitude},${newUser.location.longitude}`;
     const response = await fetch(query);
     const geopositionRes = await response.json();
+    
+    if (!geopositionRes || !geopositionRes.Key) {
+      throw new Error(`Invalid response from AccuWeather: ${JSON.stringify(geopositionRes)}`);
+    }
     newUser.locationID = geopositionRes.Key;
 
-    queryName = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}&q=${newUser.location.latitude},${newUser.location.longitude}&days=1&aqi=no&alerts=no`;
+    const queryName = `http://api.weatherapi.com/v1/forecast.json?key=${weatherKey}&q=${newUser.location.latitude},${newUser.location.longitude}&days=1&aqi=no&alerts=no`;
     const responseName = await fetch(queryName);
     const geopositionNameRes = await responseName.json();
+    
+    if (!geopositionNameRes || !geopositionNameRes.location || !geopositionNameRes.location.name) {
+      throw new Error(`Invalid response from WeatherAPI: ${JSON.stringify(geopositionNameRes)}`);
+    }
     newUser.locationName = geopositionNameRes.location.name;
 
     const locationJson = JSON.stringify(newUser, null, 2);
     localStorage.setItem(`${userID}`, locationJson);
   } catch (err) {
-    console.log(err);
+    console.error(`Error in createUser for userID ${userID}:`, err);
   }
-  return await newUser;
+  return newUser;
 }
 
 //datatype for hourly forecasts
