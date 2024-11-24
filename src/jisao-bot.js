@@ -33,7 +33,7 @@ let defaultLimits = {
 };
 if (typeof localStorage === "undefined" || localStorage === null) {
   var LocalStorage = require("node-localstorage").LocalStorage;
-  localStorage = new LocalStorage("./scratch");
+  localStorage = new LocalStorage("../scratch");
 }
 
 const localLimits = localStorage.getItem("limits");
@@ -187,7 +187,7 @@ jisaoBot.command("weather2hr", async (ctx) => {
 
     if (minuteReply.averagePrecip > -0.02) {
       await getMinuteChart(`minute.png`, data);
-      const chartFilename = `temp-images/minute.png`;
+      const chartFilename = `../temp-images/minute.png`;
 
       fs.access(chartFilename, fs.constants.F_OK, async (err) => {
         if (err) {
@@ -376,7 +376,7 @@ jisaoBot.on(message(`text`), async (ctx) => {
       return acc;
     }, []);
     await getDayChart("chart-day.png", data);
-    const chartFilename = `temp-images/chart-day.png`;
+    const chartFilename = `../temp-images/chart-day.png`;
 
     fs.access(chartFilename, fs.constants.F_OK, async (err) => {
       if (err) {

@@ -570,18 +570,18 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     stringPost += await getMIDPassports();
 
     fs.access(
-      `temp-images/${chartFilename}`,
+      `../temp-images/${chartFilename}`,
       fs.constants.F_OK,
       async (err) => {
         if (err) {
-          console.error(`temp-images/${chartFilename} does not exist`);
+          console.error(`../temp-images/${chartFilename} does not exist`);
           ctx.reply(`график тогось`);
         } else {
           if (ctx === null) {
             await jisaoBot.telegram.sendPhoto(
               targetchat,
               {
-                source: `temp-images/${chartFilename}`,
+                source: `../temp-images/${chartFilename}`,
               },
               {
                 caption: stringPost,
@@ -590,7 +590,7 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
             );
           } else if (ctx) {
             await ctx.replyWithPhoto(
-              { source: `temp-images/${chartFilename}` },
+              { source: `../temp-images/${chartFilename}` },
               { caption: stringPost, parse_mode: "Markdown" }
             );
           } else {
@@ -918,7 +918,7 @@ async function getDayChart(filename, inputData = {}) {
   const sunImage = await canvas300900.renderToBuffer(configurationSun);
   const waterImage = await canvas300900.renderToBuffer(configurationWater);
 
-  const directory = "temp-images"; // Specify the directory where you want to save the file
+  const directory = "../temp-images"; // Specify the directory where you want to save the file
   if (!fs.existsSync(directory)) {
     fs.mkdirSync(directory);
   }
@@ -988,7 +988,7 @@ async function getMinuteChart(filename, inputData = {}) {
   };
   const image = await chartJSNodeCanvas.renderToBuffer(configuration);
 
-  const directory = "temp-images"; // Specify the directory where you want to save the file
+  const directory = "../temp-images"; // Specify the directory where you want to save the file
   if (!fs.existsSync(directory)) {
     fs.mkdirSync(directory);
   }
