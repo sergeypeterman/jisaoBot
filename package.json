@@ -2,7 +2,7 @@
   "name": "jisaobot",
   "version": "0.1.0",
   "description": "tg bot for basic tasks",
-  "main": "index.js",
+  "main": "src/jisao-bot.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon jisao-bot"
