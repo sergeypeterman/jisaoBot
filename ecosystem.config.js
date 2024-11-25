@@ -1,5 +1,6 @@
 module.exports = {
-  script: "jisao-bot.js",
+  name: "jisao-bot",
+  script: "./src/jisao-bot.js",
   // Specify which folder to watch
   watch: ["src"],
   // Specify delay between watch interval
