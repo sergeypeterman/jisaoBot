@@ -523,7 +523,6 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     } else {
       let timeQuery = day === "today" ? `,${unixTime}` : "";
 
-      //changed hardcoded location
       const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/${homeUser.location.latitude},${homeUser.location.longitude}${timeQuery}?units=si&exclude=[daily,alerts]`;
       console.log(`postToBotWeather: ${pirateQuery}`);
       const pirateRes = await fetch(pirateQuery);
@@ -1033,7 +1032,7 @@ async function getPirateForecast2hr(userID) {
       jisaoMinute.error.description = `лимит пиратских запросов тогось, будем плотить?`;
       jisaoMinute.error.status = true;
     } else {
-      //hardcoded location for now
+
       const pirateQuery = `https://api.pirateweather.net/forecast/${pirateWeatherKey}/${userData.location.latitude},${userData.location.longitude}?units=si&exclude=[daily,alerts]`;
       const res = await fetch(pirateQuery);
       const response = await res.json();
