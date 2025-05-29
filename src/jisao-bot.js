@@ -18,13 +18,13 @@ const {
   getDayChart,
 } = require("./jisao-functions");
 
-const path = require('path');
-require("dotenv").config({ path: path.resolve(__dirname, '../.env') });
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
 // Verify the environment variables are loaded
-console.log('Environment check:');
-console.log('AccuWeather Key exists:', !!process.env.ACCUWEATHER_CORE_KEY);
-console.log('Weather API Key exists:', !!process.env.WEATHERAPI_KEY);
+console.log("Environment check:");
+console.log("AccuWeather Key exists:", !!process.env.ACCUWEATHER_CORE_KEY);
+console.log("Weather API Key exists:", !!process.env.WEATHERAPI_KEY);
 
 const botKeys = process.env.TG_API_KEY;
 const weatherKey = process.env.WEATHERAPI_KEY;
@@ -255,7 +255,7 @@ jisaoBot.command("updatelocation", async (ctx) => {
     const checkUserExist = localStorage.getItem(`${userID}`);
     if (!checkUserExist) {
       console.log(
-        `command->updatelocation: user ${userID} doesn't exist, creating one`
+        `command->updatelocation: user ${userID} doesn't exist, `
       );
       await ctx.reply(`ты кто, ${userID}? Записываем-с`);
       const newUser = await createUser(userID);

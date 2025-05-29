@@ -88,6 +88,7 @@ async function createUser(
     locationID: 0,
     locationName: "",
   };
+  console.log(`createUser(): looking for user ${userID} in local storage`);
 
   //checking if user already exists locally and located in the same location
   const checkUserExist = localStorage.getItem(`${userID}`);
