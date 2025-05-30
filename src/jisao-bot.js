@@ -52,7 +52,21 @@ if (localLimits) {
 
 let chatData;
 (async () => {
-  chatData = await createUser(homeChatId);
+  console.log(`jisaoBot.start(): looking for user ${homeChatId} in local storage`);
+  const lastUserData = localStorage.getItem(`${homeChatId}`);
+  if (lastUserData) {
+    userData = JSON.parse(lastUserData);
+    if (userData.location) {
+      console.log(`user ${homeChatId} already exists and located in ${userData.locationName}`);
+      chatData = await createUser(homeChatId, userData.location);
+    } else {
+      console.log(`user ${homeChatId} already exists but no location set, creating new user`);
+      chatData = await createUser(homeChatId);
+    }
+  } else {
+    console.log(`user ${homeChatId} doesn't exist, creating new user`);
+    chatData = await createUser(homeChatId);
+  }
 })(); //all roads lead to Parede (default home location)
 
 const jisaoBot = new Telegraf(botKeys);
