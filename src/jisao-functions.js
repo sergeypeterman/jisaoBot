@@ -503,7 +503,7 @@ async function postToBotWeather(day, ctx = null, targetchat = chatIdBot) {
     const unixTime = Math.floor(theDate.getTime() / 1000);
     console.log(unixTime);
 
-    const forecast = weather.forecast.forecastday[dayToPost];
+    const forecast = prepareForecast(weather.forecast.forecastday[dayToPost]);
     const jisao = getJisaoDescription(forecast.day, conditionResponse);
 
     const limits = getLimits();
@@ -1098,4 +1098,23 @@ async function getLocationDescription(latitude, longitude) {
     `getLocationDescription: description = ${JSON.stringify(description)}`
   );
   return description;
+}
+
+/**
+ * @param {*} forecast - weather.forecast.forecastday[dayToPost]
+ * @returns - prepared forecast.day with modified UV
+ */
+function prepareForecast(forecast) {
+  const preparedForecast = forecast;
+
+  const maxUV = forecast.hour.reduce((acc, item) => {
+    if (item.uv > acc) {
+      acc = item.uv;
+    }
+    return acc;
+  }, 0);
+
+  preparedForecast.day.uv = maxUV;
+  console.log(`prepareForecast: maxUV = ${maxUV}`);
+  return preparedForecast;
 }
