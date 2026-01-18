@@ -35,15 +35,8 @@ async function createUser(
 
   try {
     console.log("createUser(): getting location ID and name");
-    let query = `http://dataservice.accuweather.com/locations/v1/cities/geoposition/search?apikey=${config.accuweatherKey}`;
-    query += `&q=${newUser.location.latitude},${newUser.location.longitude}`;
-    const response = await fetch(query);
-    const geopositionRes = await response.json();
-    
-    if (!geopositionRes || !geopositionRes.Key) {
-      throw new Error(`Invalid response from AccuWeather: ${JSON.stringify(geopositionRes)}`);
-    }
-    newUser.locationID = geopositionRes.Key;
+
+	newUser.locationID = Math.random().toString(36).substring(2, 15);
 
     const queryName = `http://api.weatherapi.com/v1/forecast.json?key=${config.weatherKey}&q=${newUser.location.latitude},${newUser.location.longitude}&days=1&aqi=no&alerts=no`;
     const responseName = await fetch(queryName);

@@ -45,7 +45,7 @@ async function getForecast1hr(userID) {
   }
 
   try {
-    //getting minutecast from pirate weather (1hr = 60 minutes instead of accuweather's 2hr = 120 minutes)
+    //getting minutecast from pirate weather (1hr = 60 minutes)
     //console.log(userData);
 
     if (isLimitPirateReached) {

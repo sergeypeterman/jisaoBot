@@ -24,13 +24,14 @@ require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
 // Verify the environment variables are loaded
 console.log("Environment check:");
-console.log("AccuWeather Key exists:", !!process.env.ACCUWEATHER_CORE_KEY);
+// console.log("AccuWeather Key exists:", !!process.env.ACCUWEATHER_CORE_KEY);
 console.log("Weather API Key exists:", !!process.env.WEATHERAPI_KEY);
+console.log("Pirate Weather Key exists:", !!process.env.P_WEATHER_KEY);
 
 const botKeys = process.env.TG_API_KEY;
 const weatherKey = process.env.WEATHERAPI_KEY;
-const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
-const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
+// const accuweatherKey = process.env.ACCUWEATHER_CORE_KEY;
+// const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 
 const homeChatId = process.env.CHAT_ID; //Jisao group id
 
