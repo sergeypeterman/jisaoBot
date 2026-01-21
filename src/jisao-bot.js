@@ -378,7 +378,7 @@ cron.schedule(
   async () => {
     console.log("Scheduling weather post...");
     await jisaoBot.telegram.sendMessage(homeChatId, `доброго здоровичка`);
-    await postToBotWeather("today", null, homeChatId);
+    await postToBotWeather("today", null, homeChatId, jisaoBot);
   },
   { timezone: "Europe/Lisbon" }
 );
@@ -386,7 +386,7 @@ cron.schedule(
   "15 22 * * *", //22.15 every day
   async () => {
     console.log("Scheduling weather post...");
-    await postToBotWeather("tomorrow", null, homeChatId);
+    await postToBotWeather("tomorrow", null, homeChatId, jisaoBot);
     await jisaoBot.telegram.sendMessage(homeChatId, `спокедулечки`);
   },
   { timezone: "Europe/Lisbon" }
@@ -397,5 +397,5 @@ cron.schedule(
 jisaoBot.launch();
 
 // Enable graceful stop
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+process.once("SIGINT", () => jisaoBot.stop("SIGINT"));
+process.once("SIGTERM", () => jisaoBot.stop("SIGTERM"));

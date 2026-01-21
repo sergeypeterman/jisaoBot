@@ -165,7 +165,7 @@ async function getForecast1hr(userID) {
 }
 
 // function is being used for daily forecasts at home only (yeah, not the best name)
-async function postToBotWeather(day, ctx = null, targetchat = config.chatIdBot) {
+async function postToBotWeather(day, ctx = null, targetchat = config.chatIdBot, jisaoBot = null) {
   try {
     //getting home data
     let homeUser = getUser(config.homeChatId);
