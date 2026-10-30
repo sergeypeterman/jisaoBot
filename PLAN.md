@@ -42,8 +42,8 @@ texts, cron times) beyond what is listed here.
   time**. A container defaults to UTC, so `TZ=Europe/Lisbon` must be set.
 - Dead weight in `package.json`: `fs` (bogus npm package), `JSONStream` (unused).
   `nodemon` is the only dev dep. `canvas` 3.2.1 (transitive) ships prebuilt
-  linux-x64 glibc binaries for Node 22, so a plain `node:22-bookworm-slim` image
-  works without a compiler.
+  linux-x64 glibc binaries, so a plain slim Debian Node image works without a
+  compiler.
 - Known small bugs to fix while in there (behaviour-preserving):
   - `src/jisao-bot.js`: `userData` is an undeclared implicit global (two places).
   - `src/api-limits.js` `setLimits`: `Object.hasOwn(localLimits, ...)` throws when
@@ -75,6 +75,14 @@ texts, cron times) beyond what is listed here.
   ```
 - **Charts go to memory.** Render to a `Buffer` and send with
   `{ source: buffer }`. No `temp-images`, no `fs` in the bot.
+- **Runtime: Node 26 (Active LTS since late Oct 2026, EOL Apr 2029)** in the
+  container, image `node:26-bookworm-slim`. If that tag does not exist, use
+  `node:26-trixie-slim`, then `node:26-slim`, and record which was used. Local
+  dev may stay on Node 22; `canvas` 3, `sharp` 0.33 and `better-sqlite3` 13
+  are N-API addons, so the same lockfile works on both. Keep
+  `better-sqlite3` at >= 13 (N-API); 12.x below 12.11.1 has no Node 26
+  prebuilt. Add `"engines": { "node": ">=22" }` to `package.json`.
+  In the container smoke test, print `node --version` and confirm 26.x.
 - **Deploy: Coolify, Dockerfile build pack, from the GitHub repo** on branch
   `main`. Persistent volume mounted at `/data`. No exposed port, health check
   disabled. Env vars set in Coolify, not baked into the image.
@@ -151,7 +159,7 @@ Commit: `Send charts from memory, remove temp-images and pm2 config`.
 
 1. `Dockerfile` (multi-stage not needed, keep it short):
    ```dockerfile
-   FROM node:22-bookworm-slim
+   FROM node:26-bookworm-slim
    ENV NODE_ENV=production TZ=Europe/Lisbon DATA_DIR=/data
    WORKDIR /app
    COPY package.json package-lock.json ./
@@ -164,7 +172,7 @@ Commit: `Send charts from memory, remove temp-images and pm2 config`.
    CMD ["node", "src/jisao-bot.js"]
    ```
    `canvas` 3.x and `sharp` 0.33 need `libstdc++`/glibc only; both are present in
-   `bookworm-slim`. If `npm ci` tries to compile `canvas`, that means the prebuilt
+   the slim Debian image. If `npm ci` tries to compile `canvas`, that means the prebuilt
    download failed; check the build log for the URL and network, do not add
    `python3 make g++` unless that is confirmed.
 2. `.dockerignore`: `node_modules`, `data`, `.env`, `.git`, `*.md`, `temp-images`.
