@@ -68,17 +68,6 @@ let chatData;
 const jisaoBot = new Telegraf(botKeys);
 setBotObject(jisaoBot);
 
-//renders a chart to a PNG Buffer; returns null (and logs) if rendering fails,
-//so the caller can answer "график тогось" instead of the photo
-async function renderChart(chartFn, chartData) {
-  try {
-    return await chartFn(chartData);
-  } catch (err) {
-    console.error(`${chartFn.name}: chart render failed:`, err);
-    return null;
-  }
-}
-
 //---------------START-----------------
 jisaoBot.start(async (ctx) => {
   let replyStart = `Жизяõ ёба хуёба\nДоступные пока команды: 
@@ -138,8 +127,9 @@ jisaoBot.command("weather1hr_home", async (ctx) => {
     const { chartData, forecastText, minuteReply } = await processWeather1hrData(chatData.userID);
 
     if (minuteReply.averagePrecip > -0.02) {
-      const chartBuffer = await renderChart(getMinuteChart, chartData);
-      if (!chartBuffer) {
+      //a render failure throws into the handler catch ("ошибка ёба"), as before
+      const chartBuffer = await getMinuteChart(chartData);
+      if (!chartBuffer || chartBuffer.length === 0) {
         await ctx.reply(`график тогось`);
       } else {
         await ctx.replyWithPhoto(
@@ -164,8 +154,9 @@ jisaoBot.command("weather1hr", async (ctx) => {
     const { chartData, forecastText, minuteReply } = await processWeather1hrData(userID);
 
     if (minuteReply.averagePrecip > -0.02) {
-      const chartBuffer = await renderChart(getMinuteChart, chartData);
-      if (!chartBuffer) {
+      //a render failure throws into the handler catch ("ошибка ёба"), as before
+      const chartBuffer = await getMinuteChart(chartData);
+      if (!chartBuffer || chartBuffer.length === 0) {
         await ctx.reply(`график тогось`);
       } else {
         await ctx.replyWithPhoto(
@@ -346,8 +337,13 @@ jisaoBot.on(message(`text`), async (ctx) => {
       data.uv.push(Math.round(Math.random() * 12));
       return acc;
     }, []);
-    const chartBuffer = await renderChart(getDayChart, data);
-    if (!chartBuffer) {
+    let chartBuffer = null;
+    try {
+      chartBuffer = await getDayChart(data);
+    } catch (err) {
+      console.error("getDayChart: chart render failed:", err);
+    }
+    if (!chartBuffer || chartBuffer.length === 0) {
       await ctx.reply(`график тогось`);
     } else {
       await ctx.replyWithPhoto({ source: chartBuffer });

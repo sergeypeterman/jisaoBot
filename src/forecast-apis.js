@@ -270,13 +270,8 @@ async function postToBotWeather(day, ctx = null, targetchat = config.chatIdBot, 
       weather24hr.uv.push(pirate24hr.uv[i]);
       weather24hr.num.push((i + 1) % 24);
     }
-    let chartBuffer;
-    try {
-      chartBuffer = await getDayChart(weather24hr);
-    } catch (chartErr) {
-      chartBuffer = null;
-      console.error("postToBotWeather: day chart render failed:", chartErr);
-    }
+    //a render failure throws into the catch below, which reports it to the bot owner (as before)
+    const chartBuffer = await getDayChart(weather24hr);
     //console.log(JSON.stringify(weather24hr, null, 2));
 
     let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} ${jisao.whole}`;
@@ -289,12 +284,12 @@ async function postToBotWeather(day, ctx = null, targetchat = config.chatIdBot, 
     //stringPost += await getMIDPassports();
     //fullfilled its purpose
 
-    if (!chartBuffer) {
+    if (!chartBuffer || chartBuffer.length === 0) {
+      //no chart: on the cron path there is no ctx to reply to, so report to the owner via the catch
       if (ctx === null) {
-        await jisaoBot.telegram.sendMessage(targetchat, `график тогось`);
-      } else {
-        await ctx.reply(`график тогось`);
+        throw new Error("postToBotWeather: day chart is empty");
       }
+      await ctx.reply(`график тогось`);
     } else if (ctx === null) {
       await jisaoBot.telegram.sendPhoto(
         targetchat,
