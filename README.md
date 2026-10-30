@@ -32,7 +32,15 @@ under pm2 ("old VPS"). Do the steps in order.
    and are not baked into the image.
 4. **Storages → Add Volume:** name `jisao-data`, destination `/data`.
 5. Set Deploy to **on push** (webhook), so a push to `main` redeploys.
-6. **Before the first Deploy, stop pm2 on the old VPS:**
+6. **Before merging this work into `main`:** the old VPS has a
+   `~/jisaoBot/clean-and-pull.sh`. Do not run it from now on, and check that
+   nothing runs it automatically (`crontab -l`, `systemctl list-timers`).
+   Pulling the new code there makes pm2's file watcher restart the old
+   instance on the new code: it would stop reading `scratch` and start a
+   fresh, empty database in `~/jisaoBot/data`. If the old VPS's Node is older
+   than 22.13 it would crash instead, because `node:sqlite` is missing.
+
+   **Then, before the first Deploy, stop pm2 on the old VPS:**
    ```
    pm2 stop jisao-bot
    ```
@@ -45,18 +53,19 @@ under pm2 ("old VPS"). Do the steps in order.
 8. **Migrate the existing data** (required, right after the first successful
    deploy, before announcing the bot as moved).
 
-   On the **old VPS**, locate and pack the node-localstorage directory
-   (`scratch`, next to the directory pm2 runs the bot from):
+   On the **old VPS**, pack the node-localstorage directory. The bot runs from
+   `~/jisaoBot/src` and stores data in `../scratch`, so it is `~/jisaoBot/scratch`:
    ```
-   CWD=$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).find(p=>p.name==="jisao-bot").pm2_env.pm_cwd))')
-   SCRATCH="$(dirname "$CWD")/scratch"
-   ls -la "$SCRATCH"            # expect: limits plus one file per user/chat id
+   SCRATCH=~/jisaoBot/scratch
+   pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).find(p=>p.name==="jisao-bot").pm2_env.pm_cwd))'
+                                # expect /home/ubuntu/jisaoBot/src; if not, SCRATCH=<that dir>/../scratch
+   ls -la "$SCRATCH"            # expect: limits plus one file per user/chat id, recent mtimes
    ls "$SCRATCH" | grep -vc '^limits$'   # number of user rows to expect later
    tar czf /tmp/jisao-scratch.tgz -C "$(dirname "$SCRATCH")" scratch
    scp /tmp/jisao-scratch.tgz <user>@<coolify-vps>:/tmp/
    ```
-   (If the `pm2 jlist` line fails, read the `exec cwd` line of
-   `pm2 describe jisao-bot` and set `SCRATCH=<exec cwd>/../scratch` by hand.)
+   (If the `pm2 jlist` line fails, the `exec cwd` line of
+   `pm2 describe jisao-bot` shows the same directory.)
 
    On the **Coolify VPS**, load it into the running container. Coolify names
    the container after the application's UUID (shown in the app's URL in the
