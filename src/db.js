@@ -1,4 +1,4 @@
-const fs = require("fs");
+const { mkdirSync } = require("fs");
 const path = require("path");
 //built-in SQLite (Node >= 22.13): no native addon, so `npm ci` needs no compiler
 const { DatabaseSync } = require("node:sqlite");
@@ -12,7 +12,7 @@ require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 const dataDir = path.resolve(
   process.env.DATA_DIR || path.resolve(__dirname, "../data")
 );
-fs.mkdirSync(dataDir, { recursive: true });
+mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, "jisao.db");
 
 const db = new DatabaseSync(dbPath);

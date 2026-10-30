@@ -5,9 +5,8 @@
   "main": "src/jisao-bot.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon jisao-bot",
-    "clean": "rimraf node_modules package-lock.json",
-    "postclean": "npm install"
+    "start": "node src/jisao-bot.js",
+    "dev": "nodemon src/jisao-bot.js"
   },
   "author": "",
   "dependencies": {

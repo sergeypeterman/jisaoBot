@@ -1,6 +1,5 @@
 const { Telegraf, Markup } = require("telegraf");
 const { message } = require("telegraf/filters");
-const fs = require("fs");
 const cron = require("node-cron");
 const {
   createUser,
@@ -69,12 +68,23 @@ let chatData;
 const jisaoBot = new Telegraf(botKeys);
 setBotObject(jisaoBot);
 
+//renders a chart to a PNG Buffer; returns null (and logs) if rendering fails,
+//so the caller can answer "график тогось" instead of the photo
+async function renderChart(chartFn, chartData) {
+  try {
+    return await chartFn(chartData);
+  } catch (err) {
+    console.error(`${chartFn.name}: chart render failed:`, err);
+    return null;
+  }
+}
+
 //---------------START-----------------
 jisaoBot.start(async (ctx) => {
   let replyStart = `Жизяõ ёба хуёба\nДоступные пока команды: 
   • /weather - автоматический прогноз
-  • /weather2hr_home - прогноз дома на 2 часа
-  • /weather2hr - прогноз в текущей локации на 2 часа
+  • /weather1hr_home - прогноз дома на 2 часа
+  • /weather1hr - прогноз в текущей локации на 2 часа
   • /weathertoday - прогноз на сегодня
   • /weathertomorrow - погода на завтра
   • /updatelocation - задать свою локацию
@@ -128,20 +138,15 @@ jisaoBot.command("weather1hr_home", async (ctx) => {
     const { chartData, forecastText, minuteReply } = await processWeather1hrData(chatData.userID);
 
     if (minuteReply.averagePrecip > -0.02) {
-      await getMinuteChart(`minute.png`, chartData);
-      const chartFilename = `../temp-images/minute.png`;
-
-      fs.access(chartFilename, fs.constants.F_OK, async (err) => {
-        if (err) {
-          console.error(`${chartFilename} does not exist`);
-          ctx.reply(`график тогось`);
-        } else {
-          await ctx.replyWithPhoto(
-            { source: chartFilename },
-            { caption: forecastText }
-          );
-        }
-      });
+      const chartBuffer = await renderChart(getMinuteChart, chartData);
+      if (!chartBuffer) {
+        await ctx.reply(`график тогось`);
+      } else {
+        await ctx.replyWithPhoto(
+          { source: chartBuffer },
+          { caption: forecastText }
+        );
+      }
     }
   } catch (error) {
     console.log("error:", error);
@@ -159,20 +164,15 @@ jisaoBot.command("weather1hr", async (ctx) => {
     const { chartData, forecastText, minuteReply } = await processWeather1hrData(userID);
 
     if (minuteReply.averagePrecip > -0.02) {
-      await getMinuteChart(`minute.png`, chartData);
-      const chartFilename = `../temp-images/minute.png`;
-
-      fs.access(chartFilename, fs.constants.F_OK, async (err) => {
-        if (err) {
-          console.error(`${chartFilename} does not exist`);
-          ctx.reply(`график тогось`);
-        } else {
-          await ctx.replyWithPhoto(
-            { source: chartFilename },
-            { caption: forecastText }
-          );
-        }
-      });
+      const chartBuffer = await renderChart(getMinuteChart, chartData);
+      if (!chartBuffer) {
+        await ctx.reply(`график тогось`);
+      } else {
+        await ctx.replyWithPhoto(
+          { source: chartBuffer },
+          { caption: forecastText }
+        );
+      }
     }
     /* //post limits as well
     await ctx.reply(
@@ -346,17 +346,12 @@ jisaoBot.on(message(`text`), async (ctx) => {
       data.uv.push(Math.round(Math.random() * 12));
       return acc;
     }, []);
-    await getDayChart("chart-day.png", data);
-    const chartFilename = `../temp-images/chart-day.png`;
-
-    fs.access(chartFilename, fs.constants.F_OK, async (err) => {
-      if (err) {
-        console.error(`${filePath} does not exist`);
-        ctx.reply(`график тогось`);
-      } else {
-        await ctx.replyWithPhoto({ source: chartFilename });
-      }
-    });
+    const chartBuffer = await renderChart(getDayChart, data);
+    if (!chartBuffer) {
+      await ctx.reply(`график тогось`);
+    } else {
+      await ctx.replyWithPhoto({ source: chartBuffer });
+    }
   }
 });
 
