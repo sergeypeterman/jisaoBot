@@ -7,7 +7,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# drop the npm download cache and canvas prebuild tarballs (~27MB, unused at runtime)
+RUN npm ci --omit=dev && rm -rf /root/.npm
 COPY src ./src
 COPY scripts ./scripts
 RUN mkdir -p /data && chown node:node /data
