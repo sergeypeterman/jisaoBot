@@ -38,6 +38,11 @@ const weatherKey = process.env.WEATHERAPI_KEY;
 // const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 
 const homeChatId = process.env.CHAT_ID; //Jisao group id
+if (!homeChatId) {
+  //without it the home chat row cannot be stored (the db needs a user id),
+  //so cron posts, /*_home and /updatehomelocation will fail
+  console.error("Environment check: CHAT_ID is not set, home chat features will not work");
+}
 
 //seed default API limits if there is no stored limits row
 setLimits(getLimits());

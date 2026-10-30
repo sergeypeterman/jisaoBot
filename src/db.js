@@ -1,6 +1,12 @@
 const fs = require("fs");
 const path = require("path");
-const Database = require("better-sqlite3");
+//built-in SQLite (Node >= 22.13): no native addon, so `npm ci` needs no compiler
+const { DatabaseSync } = require("node:sqlite");
+
+//load .env (if present) so standalone users of this module, e.g.
+//scripts/import-localstorage.js or a `node -e` check, see DATA_DIR and CHAT_ID
+//like the bot does. Variables already set in the environment win.
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
 //storage lives in ${DATA_DIR}/jisao.db (./data next to src by default, /data in the container)
 const dataDir = path.resolve(
@@ -9,8 +15,8 @@ const dataDir = path.resolve(
 fs.mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, "jisao.db");
 
-const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
+const db = new DatabaseSync(dbPath);
+db.exec("PRAGMA journal_mode = WAL");
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY,
