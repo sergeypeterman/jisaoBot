@@ -32,15 +32,7 @@ under pm2 ("old VPS"). Do the steps in order.
    and are not baked into the image.
 4. **Storages → Add Volume:** name `jisao-data`, destination `/data`.
 5. Set Deploy to **on push** (webhook), so a push to `main` redeploys.
-6. **Before merging this work into `main`:** the old VPS has a
-   `~/jisaoBot/clean-and-pull.sh`. Do not run it from now on, and check that
-   nothing runs it automatically (`crontab -l`, `systemctl list-timers`).
-   Pulling the new code there makes pm2's file watcher restart the old
-   instance on the new code: it would stop reading `scratch` and start a
-   fresh, empty database in `~/jisaoBot/data`. If the old VPS's Node is older
-   than 22.13 it would crash instead, because `node:sqlite` is missing.
-
-   **Then, before the first Deploy, stop pm2 on the old VPS:**
+6. **Before the first Deploy, stop pm2 on the old VPS:**
    ```
    pm2 stop jisao-bot
    ```
