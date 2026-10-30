@@ -1,9 +1,5 @@
 # jisaoBot
 
-Telegram weather bot (Telegraf, long polling, no HTTP server). Data is kept in
-SQLite at `${DATA_DIR}/jisao.db`. In production it runs as a Docker container
-on Coolify, built from this repo's `Dockerfile`.
-
 ## Environment variables
 
 Set these in Coolify (or in a local `.env`, see `.env.example`). Never commit
@@ -97,15 +93,3 @@ under pm2 ("old VPS"). Do the steps in order.
 - Both cron posts (06:40 and 22:15) arrive at the right Lisbon times the next day.
 - `/updatelocation` from a personal chat persists across a redeploy.
 - Then remove the old instance: `pm2 delete jisao-bot && pm2 save` on the old VPS.
-
-## Local run
-
-```
-npm ci
-cp .env.example .env   # fill in values
-npm start
-```
-
-Do not run a local instance (or a local container) with the production token
-while the deployed bot is running: two pollers on one token cause 409 errors,
-and the cron jobs would post to the real group.

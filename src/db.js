@@ -1,6 +1,8 @@
 const { mkdirSync } = require("fs");
 const path = require("path");
-//built-in SQLite (Node >= 22.13): no native addon, so `npm ci` needs no compiler
+//built-in SQLite (Node >= 22.13), the PLAN.md §1 fallback: better-sqlite3 13 ships
+//prebuilt binaries, but `npm ci` in node:26-bookworm-slim still runs `node-gyp rebuild`
+//for it and fails without python/make/g++. node:sqlite needs no native addon.
 const { DatabaseSync } = require("node:sqlite");
 
 //load .env (if present) so standalone users of this module, e.g.
@@ -16,6 +18,10 @@ mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, "jisao.db");
 
 const db = new DatabaseSync(dbPath);
+//wait up to 5 s for another connection's write lock (e.g. the import script running
+//against the live bot) instead of failing at once with "database is locked".
+//node:sqlite defaults to 0; better-sqlite3 defaults to 5000.
+db.exec("PRAGMA busy_timeout = 5000");
 db.exec("PRAGMA journal_mode = WAL");
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
