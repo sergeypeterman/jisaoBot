@@ -1,4 +1,5 @@
-FROM node:26-bookworm-slim
+# Node 24 LTS, not 26: telegraf 4.16.3 (latest) multipart uploads hang on Node 26, so sendPhoto never completes.
+FROM node:24-bookworm-slim
 ENV NODE_ENV=production TZ=Europe/Lisbon DATA_DIR=/data
 # fonts: the slim image has none, so chart text (Cyrillic titles/labels) would render as boxes.
 # tzdata: keeps TZ=Europe/Lisbon working for `date` and anything outside Node's ICU.
