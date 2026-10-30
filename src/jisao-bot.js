@@ -17,6 +17,10 @@ const {
   getLocationDescription,
   getDayChart,
   processWeather1hrData,
+  getLimits,
+  setLimits,
+  getUser,
+  saveUser,
 } = require("./jisao-functions");
 
 const path = require("path");
@@ -35,29 +39,15 @@ const weatherKey = process.env.WEATHERAPI_KEY;
 
 const homeChatId = process.env.CHAT_ID; //Jisao group id
 
-let defaultLimits = {
-  limitMinute: { limitTotal: 25, limitRemain: 25 },
-  limitCore: { limitTotal: 50, limitRemain: 50 },
-  limitPirate: { limitTotal: 10000, limitRemain: 10000 },
-};
-if (typeof localStorage === "undefined" || localStorage === null) {
-  var LocalStorage = require("node-localstorage").LocalStorage;
-  localStorage = new LocalStorage("../scratch");
-}
-
-const localLimits = localStorage.getItem("limits");
-if (localLimits) {
-  defaultLimits = JSON.parse(localLimits, null, 2);
-} else {
-  localStorage.setItem("limits", JSON.stringify(defaultLimits, null, 2));
-}
+//seed default API limits if there is no stored limits row
+setLimits(getLimits());
 
 let chatData;
 (async () => {
-  console.log(`jisaoBot.start(): looking for user ${homeChatId} in local storage`);
-  const lastUserData = localStorage.getItem(`${homeChatId}`);
+  console.log(`jisaoBot.start(): looking for user ${homeChatId} in the database`);
+  const lastUserData = getUser(homeChatId);
   if (lastUserData) {
-    userData = JSON.parse(lastUserData);
+    let userData = lastUserData;
     if (userData.location) {
       console.log(`user ${homeChatId} already exists and located in ${userData.locationName}`);
       chatData = await createUser(homeChatId, userData.location);
@@ -227,7 +217,7 @@ jisaoBot.command("updatelocation", async (ctx) => {
   try {
     let userID = ctx.from.id;
     let chatID = ctx.chat.id;
-    const checkUserExist = localStorage.getItem(`${userID}`);
+    const checkUserExist = getUser(userID);
     if (!checkUserExist) {
       console.log(
         `command->updatelocation: user ${userID} doesn't exist, `
@@ -239,7 +229,7 @@ jisaoBot.command("updatelocation", async (ctx) => {
         `command->updatelocation: user ${newUser.userID} created, default location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
       );
     } else {
-      userData = JSON.parse(checkUserExist);
+      let userData = checkUserExist;
       userData.locationUpdateRequested = true;
       console.log(
         `command->updatelocation: setting locationUpdateRequested=true ${JSON.stringify(
@@ -248,10 +238,7 @@ jisaoBot.command("updatelocation", async (ctx) => {
           2
         )}`
       );
-      localStorage.setItem(
-        `${userData.userID}`,
-        JSON.stringify(userData, null, 2)
-      );
+      saveUser(userData);
     }
 
     if (chatID > 0) {
@@ -288,14 +275,11 @@ jisaoBot.on(message("location"), async (ctx) => {
       chatData.locationName = locationName;
       chatData.locationID = locationID;
 
-      localStorage.setItem(
-        `${chatData.userID}`,
-        JSON.stringify(chatData, null, 2)
-      );
+      saveUser(chatData);
       await ctx.reply(`гнездо теперь в ${chatData.locationName}`);
     } else {
       const userID = ctx.from.id;
-      const checkUserExist = localStorage.getItem(`${userID}`);
+      const checkUserExist = getUser(userID);
       let userData;
 
       if (!checkUserExist) {
@@ -312,7 +296,7 @@ jisaoBot.on(message("location"), async (ctx) => {
 
         userData = newUser;
       } else {
-        userData = JSON.parse(checkUserExist);
+        userData = checkUserExist;
         if (userData.locationUpdateRequested) {
           //await ctx.reply(`user ${userData.userID} exists, updating location`);
           userData.location.latitude = latitude;
@@ -326,7 +310,7 @@ jisaoBot.on(message("location"), async (ctx) => {
           userData.locationName = locationName;
           userData.locationID = locationID;
 
-          localStorage.setItem(`${userID}`, JSON.stringify(userData, null, 2));
+          saveUser(userData);
           await ctx.reply(`попався в ${userData.locationName}`);
         } else {
           await ctx.reply(

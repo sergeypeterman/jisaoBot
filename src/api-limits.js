@@ -1,11 +1,12 @@
 const { APILimits } = require('./types');
+const { getKV, putKV } = require('./db');
 
-//reads limits from local file, or returns a default object if there is none
+//reads limits from the database, or returns a default object if there is none
 function getLimits() {
   const limits = new APILimits();
 
-  //writing limits from disk to the object
-  const localLimits = JSON.parse(localStorage.getItem("limits"));
+  //writing stored limits to the object
+  const localLimits = getKV("limits");
   if (localLimits) {
     Object.keys(limits).map((aLimit) => {
       if (Object.hasOwn(localLimits, aLimit)) {
@@ -25,9 +26,10 @@ function getLimits() {
   return limits;
 }
 
-//write limits to the local file. If some fields aren't present, write local, or default
+//write limits to the database. If some fields aren't present, write stored, or default
 function setLimits(limits) {
-  const localLimits = JSON.parse(localStorage.getItem("limits"));
+  //a missing limits row is treated as an empty object
+  const localLimits = getKV("limits") || {};
   const limitsToWrite = new APILimits();
 
   if (limits && typeof limits === "object") {
@@ -44,7 +46,7 @@ function setLimits(limits) {
         );
       }
     });
-    localStorage.setItem("limits", JSON.stringify(limitsToWrite, null, 2));
+    putKV("limits", limitsToWrite);
   } else {
     console.log(
       `setLimits: ${limits} are not an object, nothing is written on disk`
