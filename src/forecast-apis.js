@@ -1,4 +1,3 @@
-const fs = require("fs");
 const { create1hrForecastObject, create24hrForecastObject, JisaoMinute } = require('./types');
 const { getLimits, setLimits } = require('./api-limits');
 const { getUser, jisaoBot } = require('./user-management');
@@ -166,6 +165,11 @@ async function getForecast1hr(userID) {
 
 // function is being used for daily forecasts at home only (yeah, not the best name)
 async function postToBotWeather(day, ctx = null, targetchat = config.chatIdBot, jisaoBot = null) {
+  //replies go through ctx (command) or jisaoBot.telegram (cron): one of them is required
+  if (ctx === null && jisaoBot === null) {
+    throw new Error("postToBotWeather: neither ctx nor jisaoBot is set");
+  }
+  const telegram = jisaoBot ? jisaoBot.telegram : ctx.telegram;
   try {
     //getting home data
     let homeUser = getUser(config.homeChatId);
@@ -266,8 +270,8 @@ async function postToBotWeather(day, ctx = null, targetchat = config.chatIdBot, 
       weather24hr.uv.push(pirate24hr.uv[i]);
       weather24hr.num.push((i + 1) % 24);
     }
-    const chartFilename = "chart-day.png";
-    await getDayChart(chartFilename, weather24hr);
+    //a render failure throws into the catch below, which reports it to the bot owner (as before)
+    const chartBuffer = await getDayChart(weather24hr);
     //console.log(JSON.stringify(weather24hr, null, 2));
 
     let stringPost = `Кстати, погодки в ${weather.location.name} ${theDayRus} ${jisao.whole}`;
@@ -280,39 +284,32 @@ async function postToBotWeather(day, ctx = null, targetchat = config.chatIdBot, 
     //stringPost += await getMIDPassports();
     //fullfilled its purpose
 
-    fs.access(
-      `../temp-images/${chartFilename}`,
-      fs.constants.F_OK,
-      async (err) => {
-        if (err) {
-          console.error(`../temp-images/${chartFilename} does not exist`);
-          ctx.reply(`график тогось`);
-        } else {
-          if (ctx === null) {
-            await jisaoBot.telegram.sendPhoto(
-              targetchat,
-              {
-                source: `../temp-images/${chartFilename}`,
-              },
-              {
-                caption: stringPost,
-                parse_mode: "Markdown",
-              }
-            );
-          } else if (ctx) {
-            await ctx.replyWithPhoto(
-              { source: `../temp-images/${chartFilename}` },
-              { caption: stringPost, parse_mode: "Markdown" }
-            );
-          } else {
-            throw new Error("error, context ctx doesn't exist");
-          }
-        }
+    if (!chartBuffer || chartBuffer.length === 0) {
+      //no chart: on the cron path there is no ctx to reply to, so report to the owner via the catch
+      if (ctx === null) {
+        throw new Error("postToBotWeather: day chart is empty");
       }
-    );
+      await ctx.reply(`график тогось`);
+    } else if (ctx === null) {
+      await jisaoBot.telegram.sendPhoto(
+        targetchat,
+        { source: chartBuffer },
+        {
+          caption: stringPost,
+          parse_mode: "Markdown",
+        }
+      );
+    } else {
+      await ctx.replyWithPhoto(
+        { source: chartBuffer },
+        { caption: stringPost, parse_mode: "Markdown" }
+      );
+    }
   } catch (err) {
     console.log("error:", err);
-    jisaoBot.telegram.sendMessage(config.chatIdBot, err);
+    telegram.sendMessage(config.chatIdBot, String(err)).catch((sendErr) =>
+      console.log("postToBotWeather: could not report error:", sendErr)
+    );
   }
 }
 

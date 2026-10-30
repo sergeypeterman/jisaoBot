@@ -1,8 +1,8 @@
-const fs = require("fs");
 const { ChartJSNodeCanvas } = require("chartjs-node-canvas");
 const sharp = require("sharp");
 
-async function getDayChart(filename, inputData = {}) {
+//returns the composited 900x600 PNG as a Buffer
+async function getDayChart(inputData = {}) {
   const width = 900; //px
   const height = 300; //px
   const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
@@ -170,12 +170,6 @@ async function getDayChart(filename, inputData = {}) {
   const sunImage = await canvas300900.renderToBuffer(configurationSun);
   const waterImage = await canvas300900.renderToBuffer(configurationWater);
 
-  const directory = "../temp-images"; // Specify the directory where you want to save the file
-  if (!fs.existsSync(directory)) {
-    fs.mkdirSync(directory);
-  }
-  //fs.writeFileSync(`${directory}/0${filename}`, image);
-
   const combinedImage = sharp({
     create: {
       width: 900,
@@ -189,12 +183,11 @@ async function getDayChart(filename, inputData = {}) {
     { input: sunImage, top: 0, left: 4 },
     { input: waterImage, top: 300, left: 0 },
   ]);
-  await combinedImage.png().toFile(`${directory}/${filename}`);
-
-  return true;
+  return combinedImage.png().toBuffer();
 }
 
-async function getMinuteChart(filename, inputData = {}) {
+//returns the 800x400 PNG as a Buffer
+async function getMinuteChart(inputData = {}) {
   const width = 800; //px
   const height = 400; //px
   const backgroundColour = "white"; // Uses https://www.w3schools.com/tags/canvas_fillstyle.asp
@@ -238,15 +231,7 @@ async function getMinuteChart(filename, inputData = {}) {
     },
     plugins: [],
   };
-  const image = await chartJSNodeCanvas.renderToBuffer(configuration);
-
-  const directory = "../temp-images"; // Specify the directory where you want to save the file
-  if (!fs.existsSync(directory)) {
-    fs.mkdirSync(directory);
-  }
-  fs.writeFileSync(`${directory}/${filename}`, image);
-
-  return true;
+  return chartJSNodeCanvas.renderToBuffer(configuration);
 }
 
 module.exports = {

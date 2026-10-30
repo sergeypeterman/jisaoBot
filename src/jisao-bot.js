@@ -1,6 +1,5 @@
 const { Telegraf, Markup } = require("telegraf");
 const { message } = require("telegraf/filters");
-const fs = require("fs");
 const cron = require("node-cron");
 const {
   createUser,
@@ -17,6 +16,10 @@ const {
   getLocationDescription,
   getDayChart,
   processWeather1hrData,
+  getLimits,
+  setLimits,
+  getUser,
+  saveUser,
 } = require("./jisao-functions");
 
 const path = require("path");
@@ -34,30 +37,21 @@ const weatherKey = process.env.WEATHERAPI_KEY;
 // const accuweatherMinuteKey = process.env.ACCUWEATHER_MINUTE_KEY;
 
 const homeChatId = process.env.CHAT_ID; //Jisao group id
-
-let defaultLimits = {
-  limitMinute: { limitTotal: 25, limitRemain: 25 },
-  limitCore: { limitTotal: 50, limitRemain: 50 },
-  limitPirate: { limitTotal: 10000, limitRemain: 10000 },
-};
-if (typeof localStorage === "undefined" || localStorage === null) {
-  var LocalStorage = require("node-localstorage").LocalStorage;
-  localStorage = new LocalStorage("../scratch");
+if (!homeChatId) {
+  //without it the home chat row cannot be stored (the db needs a user id),
+  //so cron posts, /*_home and /updatehomelocation will fail
+  console.error("Environment check: CHAT_ID is not set, home chat features will not work");
 }
 
-const localLimits = localStorage.getItem("limits");
-if (localLimits) {
-  defaultLimits = JSON.parse(localLimits, null, 2);
-} else {
-  localStorage.setItem("limits", JSON.stringify(defaultLimits, null, 2));
-}
+//seed default API limits if there is no stored limits row
+setLimits(getLimits());
 
 let chatData;
 (async () => {
-  console.log(`jisaoBot.start(): looking for user ${homeChatId} in local storage`);
-  const lastUserData = localStorage.getItem(`${homeChatId}`);
+  console.log(`jisaoBot.start(): looking for user ${homeChatId} in the database`);
+  const lastUserData = getUser(homeChatId);
   if (lastUserData) {
-    userData = JSON.parse(lastUserData);
+    let userData = lastUserData;
     if (userData.location) {
       console.log(`user ${homeChatId} already exists and located in ${userData.locationName}`);
       chatData = await createUser(homeChatId, userData.location);
@@ -78,8 +72,8 @@ setBotObject(jisaoBot);
 jisaoBot.start(async (ctx) => {
   let replyStart = `Жизяõ ёба хуёба\nДоступные пока команды: 
   • /weather - автоматический прогноз
-  • /weather2hr_home - прогноз дома на 2 часа
-  • /weather2hr - прогноз в текущей локации на 2 часа
+  • /weather1hr_home - прогноз дома на 2 часа
+  • /weather1hr - прогноз в текущей локации на 2 часа
   • /weathertoday - прогноз на сегодня
   • /weathertomorrow - погода на завтра
   • /updatelocation - задать свою локацию
@@ -133,20 +127,16 @@ jisaoBot.command("weather1hr_home", async (ctx) => {
     const { chartData, forecastText, minuteReply } = await processWeather1hrData(chatData.userID);
 
     if (minuteReply.averagePrecip > -0.02) {
-      await getMinuteChart(`minute.png`, chartData);
-      const chartFilename = `../temp-images/minute.png`;
-
-      fs.access(chartFilename, fs.constants.F_OK, async (err) => {
-        if (err) {
-          console.error(`${chartFilename} does not exist`);
-          ctx.reply(`график тогось`);
-        } else {
-          await ctx.replyWithPhoto(
-            { source: chartFilename },
-            { caption: forecastText }
-          );
-        }
-      });
+      //a render failure throws into the handler catch ("ошибка ёба"), as before
+      const chartBuffer = await getMinuteChart(chartData);
+      if (!chartBuffer || chartBuffer.length === 0) {
+        await ctx.reply(`график тогось`);
+      } else {
+        await ctx.replyWithPhoto(
+          { source: chartBuffer },
+          { caption: forecastText }
+        );
+      }
     }
   } catch (error) {
     console.log("error:", error);
@@ -164,20 +154,16 @@ jisaoBot.command("weather1hr", async (ctx) => {
     const { chartData, forecastText, minuteReply } = await processWeather1hrData(userID);
 
     if (minuteReply.averagePrecip > -0.02) {
-      await getMinuteChart(`minute.png`, chartData);
-      const chartFilename = `../temp-images/minute.png`;
-
-      fs.access(chartFilename, fs.constants.F_OK, async (err) => {
-        if (err) {
-          console.error(`${chartFilename} does not exist`);
-          ctx.reply(`график тогось`);
-        } else {
-          await ctx.replyWithPhoto(
-            { source: chartFilename },
-            { caption: forecastText }
-          );
-        }
-      });
+      //a render failure throws into the handler catch ("ошибка ёба"), as before
+      const chartBuffer = await getMinuteChart(chartData);
+      if (!chartBuffer || chartBuffer.length === 0) {
+        await ctx.reply(`график тогось`);
+      } else {
+        await ctx.replyWithPhoto(
+          { source: chartBuffer },
+          { caption: forecastText }
+        );
+      }
     }
     /* //post limits as well
     await ctx.reply(
@@ -227,7 +213,7 @@ jisaoBot.command("updatelocation", async (ctx) => {
   try {
     let userID = ctx.from.id;
     let chatID = ctx.chat.id;
-    const checkUserExist = localStorage.getItem(`${userID}`);
+    const checkUserExist = getUser(userID);
     if (!checkUserExist) {
       console.log(
         `command->updatelocation: user ${userID} doesn't exist, `
@@ -239,7 +225,7 @@ jisaoBot.command("updatelocation", async (ctx) => {
         `command->updatelocation: user ${newUser.userID} created, default location ${newUser.locationName}, id:${newUser.locationID}, newUser.locationUpdateRequested=${newUser.locationUpdateRequested}`
       );
     } else {
-      userData = JSON.parse(checkUserExist);
+      let userData = checkUserExist;
       userData.locationUpdateRequested = true;
       console.log(
         `command->updatelocation: setting locationUpdateRequested=true ${JSON.stringify(
@@ -248,10 +234,7 @@ jisaoBot.command("updatelocation", async (ctx) => {
           2
         )}`
       );
-      localStorage.setItem(
-        `${userData.userID}`,
-        JSON.stringify(userData, null, 2)
-      );
+      saveUser(userData);
     }
 
     if (chatID > 0) {
@@ -288,14 +271,11 @@ jisaoBot.on(message("location"), async (ctx) => {
       chatData.locationName = locationName;
       chatData.locationID = locationID;
 
-      localStorage.setItem(
-        `${chatData.userID}`,
-        JSON.stringify(chatData, null, 2)
-      );
+      saveUser(chatData);
       await ctx.reply(`гнездо теперь в ${chatData.locationName}`);
     } else {
       const userID = ctx.from.id;
-      const checkUserExist = localStorage.getItem(`${userID}`);
+      const checkUserExist = getUser(userID);
       let userData;
 
       if (!checkUserExist) {
@@ -312,7 +292,7 @@ jisaoBot.on(message("location"), async (ctx) => {
 
         userData = newUser;
       } else {
-        userData = JSON.parse(checkUserExist);
+        userData = checkUserExist;
         if (userData.locationUpdateRequested) {
           //await ctx.reply(`user ${userData.userID} exists, updating location`);
           userData.location.latitude = latitude;
@@ -326,7 +306,7 @@ jisaoBot.on(message("location"), async (ctx) => {
           userData.locationName = locationName;
           userData.locationID = locationID;
 
-          localStorage.setItem(`${userID}`, JSON.stringify(userData, null, 2));
+          saveUser(userData);
           await ctx.reply(`попався в ${userData.locationName}`);
         } else {
           await ctx.reply(
@@ -357,17 +337,17 @@ jisaoBot.on(message(`text`), async (ctx) => {
       data.uv.push(Math.round(Math.random() * 12));
       return acc;
     }, []);
-    await getDayChart("chart-day.png", data);
-    const chartFilename = `../temp-images/chart-day.png`;
-
-    fs.access(chartFilename, fs.constants.F_OK, async (err) => {
-      if (err) {
-        console.error(`${filePath} does not exist`);
-        ctx.reply(`график тогось`);
-      } else {
-        await ctx.replyWithPhoto({ source: chartFilename });
-      }
-    });
+    let chartBuffer = null;
+    try {
+      chartBuffer = await getDayChart(data);
+    } catch (err) {
+      console.error("getDayChart: chart render failed:", err);
+    }
+    if (!chartBuffer || chartBuffer.length === 0) {
+      await ctx.reply(`график тогось`);
+    } else {
+      await ctx.replyWithPhoto({ source: chartBuffer });
+    }
   }
 });
 

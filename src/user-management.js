@@ -1,4 +1,5 @@
 const config = require('./config');
+const { getUserRow, putUserRow } = require('./db');
 
 let jisaoBot;
 function setBotObject(botObject) {
@@ -17,12 +18,11 @@ async function createUser(
     locationID: 0,
     locationName: "",
   };
-  console.log(`createUser(): looking for user ${userID} in local storage`);
+  console.log(`createUser(): looking for user ${userID} in the database`);
 
   //checking if user already exists locally and located in the same location
-  const checkUserExist = localStorage.getItem(`${userID}`);
-  if (checkUserExist) {
-    const existingUser = JSON.parse(checkUserExist);
+  const existingUser = getUserRow(userID);
+  if (existingUser) {
     if (existingUser.location.latitude === newUser.location.latitude) {
       if (existingUser.location.longitude === newUser.location.longitude) {
         console.log(
@@ -47,8 +47,7 @@ async function createUser(
     }
     newUser.locationName = geopositionNameRes.location.name;
 
-    const locationJson = JSON.stringify(newUser, null, 2);
-    localStorage.setItem(`${userID}`, locationJson);
+    putUserRow(newUser);
   } catch (err) {
     console.error(`Error in createUser for userID ${userID}:`, err);
   }
@@ -56,16 +55,18 @@ async function createUser(
 }
 
 function getUser(userID) {
-  let userData;
+  const userData = getUserRow(userID);
 
-  if (!localStorage.getItem(`${userID}`)) {
+  if (!userData) {
     console.log(`user ${userID} doesn't exist`);
     return null;
-  } else {
-    userData = JSON.parse(localStorage.getItem(`${userID}`));
-    //console.log(`getForecast1hr: user exists ${JSON.stringify(userData, null, 2)}`);
   }
   return userData;
+}
+
+//upsert a user row (keyed by String(user.userID))
+function saveUser(user) {
+  putUserRow(user);
 }
 
 async function getLocationDescription(latitude, longitude) {
@@ -84,6 +85,7 @@ async function getLocationDescription(latitude, longitude) {
 module.exports = {
   createUser,
   getUser,
+  saveUser,
   getLocationDescription,
   setBotObject,
   get jisaoBot() {
